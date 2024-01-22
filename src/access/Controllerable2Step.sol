@@ -11,7 +11,7 @@ import { Ownable2Step } from "./Ownable2Step.sol";
  * Each controller type is identified by a string, so you can make an unlimited amount of controller types, such as "MINTER", "BURNER", "OPERATOR", then you can verify internally with onlyController("MINTER") or externally with isController("MINTER", <addressToLookup>)
  */
 
-abstract contract Controllerable is Ownable2Step {
+abstract contract Controllerable2Step is Ownable2Step {
 
     event ControllerSet(address indexed owner, address indexed controller, string controllerType, bool status);
     
