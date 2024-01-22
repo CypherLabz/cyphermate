@@ -9,12 +9,15 @@ abstract contract ERC20 {
 
     string public name;
     string public symbol;
-    uint8 public immutable decimals;
 
-    constructor(string memory name_, string memory symbol_, uint8 decimals_) {
+    // Override decimals using a function override here
+    function decimals() public view virtual returns (uint8) {
+        return 18; 
+    }
+
+    constructor(string memory name_, string memory symbol_) {
         name = name_;
         symbol = symbol_;
-        decimals = decimals_;
     }
 
     uint256 public totalSupply;
