@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
-// Last update: 2024-01-22
+// Last update: 2024-02-12
+pragma solidity ^0.8.20;
 
 // EIP-20 Compliant -> https://eips.ethereum.org/EIPS/eip-20
 abstract contract ERC20 {
