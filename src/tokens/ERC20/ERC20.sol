@@ -49,6 +49,28 @@ abstract contract ERC20 {
         
         emit Transfer(from_, address(0), amount_);
     }
+
+    function _transfer(address from_, address to_, uint256 amount_) internal virtual {
+        require(from_ != address(0), "ERC20: _transfer from_ zero");
+        require(to_ != address(0), "ERC20: _transfer to_ zero");
+
+        balanceOf[from_] -= amount_; // underflow-as-require
+
+        // Cannot overflow because the sum of all user 
+        // balances can't exceed max uint256 value.
+        unchecked { 
+            balanceOf[to_] += amount_;
+        }
+
+        emit Transfer(from_, to_, amount_);
+    }
+
+    function _spendAllowance(address from_, address operator_, uint256 amount_) 
+    internal virtual {
+        if (allowance[from_][operator_] != type(uint256).max) {
+            allowance[from_][operator_] -= amount_; // underflow-as-require
+        }
+    }
     
     function approve(address spender_, uint256 amount_) public virtual returns (bool) {
         allowance[msg.sender][spender_] = amount_;
@@ -57,37 +79,13 @@ abstract contract ERC20 {
     }
 
     function transfer(address to_, uint256 amount_) public virtual returns (bool) {
-        require(to_ != address(0), "ERC20: TRANSFER_NOT_BURN");
-
-        balanceOf[msg.sender] -= amount_; // underflow-as-require
-        
-        // Cannot overflow because the sum of all user
-        // balances can't exceed the max uint256 value.
-        unchecked {
-            balanceOf[to_] += amount_;
-        }
-
-        emit Transfer(msg.sender, to_, amount_);
+        _transfer(msg.sender, to_, amount_);
         return true;
     }
 
     function transferFrom(address from_, address to_, uint256 amount_) public virtual returns (bool) {
-        require(from_ != address(0), "ERC20: TRANSFERFROM_NOT_MINT");
-        require(to_ != address(0), "ERC20: TRANSFERFROM_NOT_BURN");
-        
-        if (allowance[from_][msg.sender] != type(uint256).max) {
-            allowance[from_][msg.sender] -= amount_; // underflow-as-require
-        }
-        
-        balanceOf[from_] -= amount_; // underflow-as-require
-        
-        // Cannot overflow because the sum of all user
-        // balances can't exceed the max uint256 value.
-        unchecked {
-            balanceOf[to_] += amount_;
-        }
-
-        emit Transfer(from_, to_, amount_);
+        _spendAllowance(from_, msg.sender, amount_);
+        _transfer(from_, to_, amount_);
         return true;
     }
 }
