@@ -2,7 +2,7 @@
 // Last update: 2024-02-12
 pragma solidity ^0.8.20;
 
-import { Ownable } from "./Ownable.sol";
+import { Ownable } from "../Ownable.sol";
 
 // An extension of EIP-173 for a 2-step verification of ownership transfer.
 abstract contract Ownable2Step is Ownable {
