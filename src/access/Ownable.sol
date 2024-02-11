@@ -25,6 +25,14 @@ abstract contract Ownable {
     }
 
     function transferOwnership(address newOwner_) external virtual onlyOwner {
+        require(newOwner_ != address(0), "Ownable: ZERO_ADDRESS_TRANSFER");
         _transferOwnership(newOwner_);
+    }
+
+    // renounceOwnership() is made payable with a small ether requirement
+    // to prevent accidental renounces
+    function renounceOwnership() public payable virtual onlyOwner {
+        require(msg.value == 0.000000000000000173 ether);
+        _transferOwnership(address(0));
     }
 }
