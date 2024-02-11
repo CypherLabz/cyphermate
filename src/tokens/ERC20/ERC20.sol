@@ -74,7 +74,10 @@ abstract contract ERC20 {
         require(from_ != address(0), "ERC20: TRANSFERFROM_NOT_MINT");
         require(to_ != address(0), "ERC20: TRANSFERFROM_NOT_BURN");
         
-        allowance[from_][msg.sender] -= amount_; // underflow-as-require
+        if (allowance[from_][msg.sender] != type(uint256).max) {
+            allowance[from_][msg.sender] -= amount_; // underflow-as-require
+        }
+        
         balanceOf[from_] -= amount_; // underflow-as-require
         
         // Cannot overflow because the sum of all user
