@@ -298,14 +298,14 @@ abstract contract ERC404 is Ownable {
 
     // transfer etc operations\
     // an erc20-esque user-initiated transfer operation
-    function transfer(address to_, uint256 amount_) external virtual returns (bool) {
+    function transfer(address to_, uint256 amount_) public virtual returns (bool) {
         _transfer(msg.sender, to_, amount_);
         return true;
     }
 
     // @0xinu 2024-12-19 not in my optimal dev state so need to re-read this as well
     // a multi-handler for erc20-esque AND erc721-esque transferFrom operation, identified by tokenId
-    function transferFrom(address from_, address to_, uint256 amtOrTokenId_) external virtual returns (bool) {
+    function transferFrom(address from_, address to_, uint256 amtOrTokenId_) public virtual returns (bool) {
 
         // make sure we're not trying to mint a token (might be redundant)
         require(from_ != address(0), "ERC404: transferFrom from zero address");
@@ -347,18 +347,151 @@ abstract contract ERC404 is Ownable {
         return true;
     }
 
+    // safeTransferFroms are a erc721-esque standard thus we can assume that amtOrTokenId will be within erc721-range only, otherwise we may be transferring erc20-esques but checking for erc721-esque receivability
+    function _safeTransferFrom(address from_, address to_, uint256 amtOrTokenId_, bytes memory data_) internal virtual returns (bool) {
+        require(totalChunks > amtOrTokenId_, "ERC404: _safeTransferFrom invalid ID");
+
+        transferFrom(from_, to_, amtOrTokenId_);
+
+        require(
+            to_.code.length == 0 ||
+                ERC721TokenReceiver(to_).onERC721Received(msg.sender, from_, amtOrTokenId_, data_) == 
+                ERC721TokenReceiver.onERC721Received.selector,
+            "ERC404: safeTransferFrom unsafe recipient"
+        );
+
+        return true;
+    }
+
+    function safeTransferFrom(address from_, address to_, uint256 amtOrTokenId_, bytes calldata data_) public virtual returns (bool) {
+        return _safeTransferFrom(from_, to_, amtOrTokenId_, data_);
+    }
+
+    function safeTransferFrom(address from_, address to_, uint256 amtOrTokenId_) public virtual returns (bool) {
+        return _safeTransferFrom(from_, to_, amtOrTokenId_, "");
+    }
+
+    // now that we have our transfer operations handled, we look to approval functions
+    // function approve is a multi-handler for erc20-esque AND erc721-esque approve operation, identified by tokenId
+    function approve(address operator_, uint256 amtOrTokenId_) public virtual returns (bool) {
+
+        // if the totalChunks is more than amtOrTokenId_, this means it's an erc721-esque approval (amtOrTokenId_ is within chunk-range)
+        if (totalChunks > amtOrTokenId_) {
+            // do an erc721-esque approval
+            // find the owner of the token
+            address _owner = chunkToOwners[amtOrTokenId_].owner;
+
+            // make sure the approver is authorized to approve the token
+            require(
+                _owner == msg.sender || // the approver must be the owner of the token
+                isApprovedForAll[_owner][msg.sender], // or an approved operator
+                "ERC404: approve from unallowed user"
+            );
+    
+            getApproved[amtOrTokenId_] = operator_;
+            emit ERC721Approval(_owner, operator_, amtOrTokenId_);
+        }
+
+        // otherwise, it's an erc20-esque approval (amtOrTokenId_ is out of chunk-range)
+        else {
+            // do an erc20-esque approval
+            allowance[msg.sender][operator_] = amtOrTokenId_;
+            emit Approve(msg.sender, operator_, amtOrTokenId_);
+        }
+
+        return true;
+    }
+
+    // setApprovalForAll is an erc721-specific approve 
+    function setApprovalForAll(address operator_, bool approved_) public virtual {
+        isApprovedForAll[msg.sender][operator_] = approved_;
+        emit ApprovalForAll(msg.sender, operator_, approved_);
+    }
 
 
-
+    // standard views of owner and balance
+    function ownerOf(uint256 tokenId_) public virtual view returns (address) {
+        address _owner = chunkToOwners[tokenId_].owner;
+        require(_owner != address(0), "ERC404: ownerOf token does not exist");
+        return _owner;
+    }
 
     // reroll operation
+    // function _reroll is the internal handler for rerolling a token to the pool
+    function _reroll(uint256 tokenId_) internal virtual {
 
+        // make sure that the token actually exists
+        address _owner = chunkToOwners[tokenId_].owner;
+        require(_owner != address(0), "ERC404: _reroll non-existant token");
 
+        // now, we have to create some reroll logic. there is no erc20 movement, so actually we can save some gas by not thinking about erc20 as the balances of chunks remain the same.
+        
+        // first, find the index of the user's token
+        uint256 _indexToBePooled = chunkToOwners[tokenId_].index;
 
+        // now, do pool RNG
+        uint256 _poolLen = ownerToChunkIndexes[TOKEN_POOL].length;
+        uint256 _rng = _getRng();
+        uint256 _redeemIndex = _rng % _poolLen; // a number between 0 and pool's length - 1
+        uint16 _redeemId = ownerToChunkIndexes[TOKEN_POOL][_redeemIndex]; // we found the id
 
+        // now, swap the IDs
+        
+        // swap the user's token to the pool's
+        chunkToOwners[tokenId_] = ChunkInfo(
+            TOKEN_POOL,
+            uint96(_redeemIndex) // we reuse the redeem index as the new tokenId location
+        );
 
+        // we reuse the chunkIndex and store the swapped token into the pool
+        ownerToChunkIndexes[TOKEN_POOL][_redeemIndex] = uint16(tokenId_); 
 
-    // tokenuri
+        // swap the redeemed ID with the index of the user
+        chunkToOwners[_redeemId] = ChunkInfo(
+            _owner,
+            uint96(_indexToBePooled)
+        );
 
+        // we reuse the chunkIndex and store the swapped token into the user
+        ownerToChunkIndexes[_owner][_indexToBePooled] = _redeemId;
 
+        // now, emit a double transfer, indicating a reroll swap
+        emit Transfer(_owner, TOKEN_POOL, tokenId_); // owner -> pool
+        emit Transfer(TOKEN_POOL, _owner, _redeemId); // pool -> owner
+    }
+
+    // function reroll is the external handler for a user-initiated token reroll. we return a boolean in the fashion of erc20. 
+    function reroll(uint256 tokenId_) public virtual returns (bool) {
+
+        // make sure that the owner is the only one who can reroll.
+        // technically, we can also allow approved users to reroll the token as well, but this is not added canonically.
+        address _owner = chunkToOwners[tokenId_].owner;
+        require(_owner == msg.sender, "ERC404: reroll not owner of token");
+
+        _reroll(tokenId_);        
+
+        return true;
+    }
+
+    // tokenuri (needs to be implemented)
+    function tokenURI(uint256 tokenId_) public virtual view returns (string memory);
+
+    // magic ERC165 selectors, this one is erc721-esque
+    function supportsInterface(bytes4 interfaceId_) public view virtual returns (bool) {
+        return
+            interfaceId_ == 0x01ffc9a7 || // ERC165 Interface ID for ERC165
+            interfaceId_ == 0x80ac58cd || // ERC165 Interface ID for ERC721
+            interfaceId_ == 0x5b5e139f; // ERC165 Interface ID for ERC721Metadata
+    }
+}
+
+abstract contract ERC721TokenReceiver {
+    function onERC721Received(
+        address, // operator
+        address, // from 
+        uint256, // tokenId
+        bytes calldata // data
+    ) external virtual returns (bytes4) {
+        return ERC721TokenReceiver.onERC721Received.selector;
+    }
 }
