@@ -99,6 +99,7 @@ abstract contract ERC404 is Ownable {
     // an index array for each user keeps track of which chunks the owner has
     // we make it a uint16 limiting totalChunks to 65535 and saving 16x gas on .push()
     mapping(address => uint16[]) public ownerToChunkIndexes;
+    mapping(address => uint256) public ownerToActiveLength; // also acts as an erc721 balanceOf
 
     // now, we keep track of single-unit-of-accounts in an erc20 way
     mapping(address => uint256) public balanceOf;
@@ -162,15 +163,35 @@ abstract contract ERC404 is Ownable {
         // figure out of we're going to mint or redeem
         if (totalChunks > _initializedChunkIndex) {
             // this is a mint
-            // we're going to mint the token id of _initializedChunkIndex to the user
-            // we add owner data to the chunkToOwners storage
-            chunkToOwners[_initializedChunkIndex] = ChunkInfo(
-                to_,
-                uint96(ownerToChunkIndexes[to_].length) // equates to index, cause we're pushing one after 
-            );
+            // first, find if the user has any initialized slots for us to consume
+            uint256 _lastLengthTo = ownerToChunkIndexes[to_].length;
+            uint256 _lastActiveLengthTo = ownerToActiveLength[to_];
 
-            // push the tokenId into the ownerToChunkIndexes storage (this also increases the index, yay!)
-            ownerToChunkIndexes[to_].push(uint16(_initializedChunkIndex));
+            // if there are available initialized slots, use them
+            if (_lastLengthTo > _lastActiveLengthTo) {
+                chunkToOwners[_initializedChunkIndex] = ChunkInfo(
+                    to_, 
+                    uint96(_lastActiveLengthTo)
+                );
+
+                // increase the active length
+                unchecked {
+                    ownerToActiveLength[to_]++;
+                }
+
+                // lastly, change the tokenId at the index
+                ownerToChunkIndexes[to_][_lastActiveLengthTo + 1] = uint16(_initializedChunkIndex);
+            }
+
+            // if there are no available initialized indexes, do a push operation
+            else {
+                chunkToOwners[_initializedChunkIndex] = ChunkInfo(
+                    to_,
+                    uint96(_lastLengthTo)
+                );
+
+                ownerToChunkIndexes[to_].push(uint16(_initializedChunkIndex));
+            }
 
             // increment the initializedChunkIndex 
             unchecked {
@@ -185,29 +206,64 @@ abstract contract ERC404 is Ownable {
         else {
             // this is a redeem
             // first, we're going to find what token id we're gonna get through an rng function
-            uint256 _poolLen = ownerToChunkIndexes[TOKEN_POOL].length;
+            // uint256 _poolLen = ownerToChunkIndexes[TOKEN_POOL].length;
+            uint256 _poolLen = ownerToActiveLength[TOKEN_POOL]; // chunk-reuse-optimization-length
             uint256 _rng = _getRng();
             uint256 _redeemIndex = _rng % _poolLen; // a number between 0 and the pool's length - 1
             uint16 _tokenId = ownerToChunkIndexes[TOKEN_POOL][_redeemIndex]; // the redeemed tokenId
 
-            // now, we transfer that tokenId to the address to_
-            chunkToOwners[_tokenId] = ChunkInfo(
-                to_, 
-                uint96(ownerToChunkIndexes[to_].length) // equates to the last index
-            );
+            // check if to_ has any available slots. if has, use them.
+            uint256 _lastLengthTo = ownerToChunkIndexes[to_].length;
+            uint256 _lastActiveLengthTo = ownerToActiveLength[to_];
 
-            // push that tokenId to the owner's indexes
-            ownerToChunkIndexes[to_].push(_tokenId);
+            // if there are available initialized slots, use them
+            if (_lastLengthTo > _lastActiveLengthTo) {
+                // ownership change of chunk
+                chunkToOwners[_tokenId] = ChunkInfo(
+                    to_,
+                    uint96(_lastActiveLengthTo)
+                );
 
-            // now, we also have to remove it from the pool's indexes
-            // if the index is not the last index
+                // increase active length
+                unchecked {
+                    ownerToActiveLength[to_]++;
+                }
+
+                // rewrite to initialized slot
+                ownerToChunkIndexes[to_][_lastActiveLengthTo] = _tokenId;
+            }
+
+            // if there are no available initialized slots, do a push 
+            else {
+                // ownership change of chunk
+                chunkToOwners[_tokenId] = ChunkInfo(
+                    to_,
+                    uint96(_lastLengthTo)
+                );
+
+                // push tokenId to a new slot
+                ownerToChunkIndexes[to_].push(_tokenId);
+            }
+
+            // now, we also need to remove the token from the pool's indexes
             if (_redeemIndex != _poolLen - 1) {
-                // replace the to-be-redeemed index with the last index
+                // replace the to-be-redeemed index with the last index (phantom last)
                 ownerToChunkIndexes[TOKEN_POOL][_redeemIndex] = ownerToChunkIndexes[TOKEN_POOL][_poolLen - 1];
             }
 
-            // remove the last index of the pool's chunkIndexes
-            ownerToChunkIndexes[TOKEN_POOL].pop();
+            // now, decrease the active index
+            ownerToActiveLength[TOKEN_POOL]--;
+
+
+            // // now, we also have to remove it from the pool's indexes
+            // // if the index is not the last index
+            // if (_redeemIndex != _poolLen - 1) {
+            //     // replace the to-be-redeemed index with the last index
+            //     ownerToChunkIndexes[TOKEN_POOL][_redeemIndex] = ownerToChunkIndexes[TOKEN_POOL][_poolLen - 1];
+            // }
+
+            // // remove the last index of the pool's chunkIndexes
+            // ownerToChunkIndexes[TOKEN_POOL].pop();
 
             // sanity-check delete the token's existing approvals (there should be none)
             delete getApproved[_tokenId];
@@ -221,30 +277,101 @@ abstract contract ERC404 is Ownable {
     // function _poolChunk takes a user's chunk and puts it into the pool in a FILO queue
     function _poolChunk(address from_) internal virtual {
         // find the FILO token id for the address
-        uint256 _lastIndex = ownerToChunkIndexes[from_].length - 1;
+        uint256 _lastIndex = ownerToActiveLength[from_] - 1;
         uint256 _tokenId = ownerToChunkIndexes[from_][_lastIndex];
 
-        // now, pop the tracker for the address's tokens
-        ownerToChunkIndexes[from_].pop();
+        // // now, pop the tracker for the address's tokens
+        // ownerToChunkIndexes[from_].pop();
+
+        // decrease the active length 
+        ownerToActiveLength[from_]--;
 
         // delete the token's existing approvals
         delete getApproved[_tokenId];
 
-        // transfer the FILO'ed token id of from_ to the pool. optional burn for display by setting address(0) in event.
-        // the ownerOf equivalent moving
-        chunkToOwners[_tokenId] = ChunkInfo(
-            TOKEN_POOL,
-            uint96(ownerToChunkIndexes[TOKEN_POOL].length)
-        );
+        // // transfer the FILO'ed token id of from_ to the pool. optional burn for display by setting address(0) in event.
+        // // the ownerOf equivalent moving
+        // chunkToOwners[_tokenId] = ChunkInfo(
+        //     TOKEN_POOL,
+        //     uint96(ownerToChunkIndexes[TOKEN_POOL].length)
+        // );
 
-        // we also need to store the index for gathering pool's tokens
-        ownerToChunkIndexes[TOKEN_POOL].push(uint16(_tokenId));
+        // // we also need to store the index for gathering pool's tokens
+        // ownerToChunkIndexes[TOKEN_POOL].push(uint16(_tokenId));
+
+        // find the active index and the length of TOKEN_POOL
+        uint256 _poolInitializedLength = ownerToChunkIndexes[TOKEN_POOL].length;
+        uint256 _poolActiveLength = ownerToActiveLength[TOKEN_POOL];
+
+        // there are initialized inactive slots for TOKEN_POOL to use
+        if (_poolInitializedLength > _poolActiveLength) {
+            // push the active length forwards by 1
+            unchecked {
+                ownerToActiveLength[TOKEN_POOL]++;
+            }
+
+            // we store the token id in the increased active length slot
+            ownerToChunkIndexes[TOKEN_POOL][_poolActiveLength] = uint16(_tokenId);
+
+            // now, _poolActiveLength is also the index that we will put our new token in
+            chunkToOwners[_tokenId] = ChunkInfo(
+                TOKEN_POOL,
+                uint96(_poolActiveLength)
+            );
+        }
 
         // emit the pooling transfer
         // emit Transfer(from_, TOKEN_POOL, _tokenId);
         _emitERC721Transfer(from_, TOKEN_POOL, _tokenId);
     }
 
+    function _swapSlots(address from_, address to_, uint256 amount_) internal virtual {
+
+        // for amount
+        for (uint256 i = 0; i < amount_;) {
+            // amount_ here the the amount of chunks
+            uint256 _lastIndexFrom = ownerToChunkIndexes[from_].length - 1;
+            uint256 _tokenToSwap = ownerToChunkIndexes[from_][_lastIndexFrom];
+
+            // _tokenToSwap is the token that we are going to initate the swap
+            // first, we need to figure out if the target needs to push, or he can reuse his index
+            uint256 _lastLengthTo = ownerToChunkIndexes[to_].length;
+            uint256 _lastActiveLengthTo = ownerToActiveLength[to_];
+
+            // if there are available initialized indexes, use them
+            if (_lastLengthTo > _lastActiveLengthTo) {
+                // first, swap out the owner in chunkToOwners
+                chunkToOwners[_tokenToSwap] = ChunkInfo(
+                    to_,
+                    uint96(_lastActiveLengthTo + 1)
+                );
+
+                // increase the active length
+                unchecked { 
+                    ownerToActiveLength[to_]++;
+                }
+
+                // and lastly, change the tokenId at the index
+                ownerToChunkIndexes[to_][_lastActiveLengthTo + 1] = uint16(_tokenToSwap);
+            }
+
+            // if there are no avaialble initialized indexes, we do a push operation
+            else {
+                chunkToOwners[_tokenToSwap] = ChunkInfo(
+                    to_,
+                    uint96(_lastLengthTo)
+                );
+
+                ownerToChunkIndexes[to_].push(uint16(_tokenToSwap));
+            }
+
+            // now, for the sender... 
+            // i think we can actually just decrease the active length and that's it
+            ownerToActiveLength[from_]--;
+
+            unchecked { ++i; }
+        }
+    }
     
     // function _transfer is the handler for an ERC20-esque transfer
     function _transfer(address from_, address to_, uint256 amount_) internal virtual {
@@ -262,6 +389,27 @@ abstract contract ERC404 is Ownable {
 
         // emit ERC20Transfer(from_, to_, amount_);
         _emitERC20Transfer(from_, to_, amount_);
+
+        // storage-save-swap gas-optimized erc721-esque transfers
+        if (!whitelisted[from_] && !whitelisted[to_]) {
+            // do a storage-save-swap of data and then return, so that we don't trigger the bottom conditions
+            uint256 _chunkDiffFrom = 
+                (_startBalFrom / chunkSize) - 
+                (balanceOf[from_] / chunkSize);
+
+            uint256 _chunkDiffTo =
+                (balanceOf[to_] / chunkSize);
+                (_startBalTo / chunkSize);
+
+            if (_chunkDiffFrom == _chunkDiffTo && _chunkDiffFrom > 0) {
+                // there is the same amount of chunk manipulations of from and to
+                // in addition to that, the chunk difference is over 0
+                // which means that manipulations must be made
+
+
+
+            }
+        }
 
         // now, we have some ERC404-specific whitelist+erc721-esque techniques
         // whitelisted addresses dont have pseudo-phantom erc721-esque burns and mints
@@ -322,30 +470,63 @@ abstract contract ERC404 is Ownable {
         require(!whitelisted[from_], "ERC404: _chunkTransfer whitelisted cannot use");
         require(!whitelisted[to_], "ERC404: _chunkTransfer whitelisted cannot receive");
 
-        // now, we start doing the erc721-esque transfer operation
-        // first, we must pop the current owner's index and delete their approveds
+        // erc721-esque transfer operations
+        // find the token index of the token to be transferred from the sender
         uint96 _tokenIndex = chunkToOwners[tokenId_].index;
-        uint256 _lastIndex = ownerToChunkIndexes[_owner].length - 1;
+        uint256 _lastActiveIndex = ownerToActiveLength[_owner] - 1; // get the last active index
 
-        // do the enumerable-slot-swap if it's not the last index
-        if (_tokenIndex != _lastIndex) {
-            ownerToChunkIndexes[_owner][_tokenIndex] = ownerToChunkIndexes[_owner][_lastIndex];
+        // do enumerable-slot-swap if its not the last active index
+        if (_tokenIndex != _lastActiveIndex) {
+            // replace the to-be-transferred slot with the last slot of the active index
+            ownerToChunkIndexes[_owner][_tokenIndex] = ownerToChunkIndexes[_owner][_lastActiveIndex];
         }
 
-        // pop the chunk index
-        ownerToChunkIndexes[_owner].pop();
+        // decrease the active length of the sender
+        ownerToActiveLength[_owner]--;
+
+        // // now, we start doing the erc721-esque transfer operation
+        // // first, we must pop the current owner's index and delete their approveds
+        // uint96 _tokenIndex = chunkToOwners[tokenId_].index;
+        // uint256 _lastIndex = ownerToChunkIndexes[_owner].length - 1;
+
+        // // do the enumerable-slot-swap if it's not the last index
+        // if (_tokenIndex != _lastIndex) {
+        //     ownerToChunkIndexes[_owner][_tokenIndex] = ownerToChunkIndexes[_owner][_lastIndex];
+        // }
+
+        // // pop the chunk index
+        // ownerToChunkIndexes[_owner].pop();
 
         // delete the getApproved
         delete getApproved[tokenId_];
 
-        // now, record the new owner in chunkToOwners
-        chunkToOwners[tokenId_] = ChunkInfo(
-            to_,
-            uint96(ownerToChunkIndexes[to_].length)
-        );
+        // for a push, we need to check if the receiver has available initialized slots
+        uint256 _lastLengthTo = ownerToChunkIndexes[to_].length;
+        uint256 _lastActiveLengthTo = ownerToActiveLength[to_]; 
 
-        // then, add the token to his indexes
-        ownerToChunkIndexes[to_].push(uint16(tokenId_));
+        // if there are available slots, use them
+        if (_lastLengthTo > _lastActiveLengthTo) {
+            chunkToOwners[tokenId_] = ChunkInfo(
+                to_,
+                uint96(_lastActiveLengthTo)
+            );
+
+            unchecked { 
+                ownerToActiveLength[to_]++;
+            }
+
+            ownerToChunkIndexes[to_][_lastActiveLengthTo] = uint16(tokenId_);
+        }
+
+        // otherwise there are no available slots, we have to push
+        else {
+            chunkToOwners[tokenId_] = ChunkInfo(
+                to_,
+                uint96(_lastLengthTo)
+            );
+
+            ownerToChunkIndexes[to_].push(uint16(tokenId_));
+        }
 
         // emit a erc721 transfer
         // emit Transfer(from_, to_, tokenId_);
