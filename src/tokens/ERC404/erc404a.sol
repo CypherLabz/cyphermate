@@ -671,7 +671,8 @@ abstract contract ERC404 is Ownable {
         uint256 _indexToBePooled = chunkToOwners[tokenId_].index;
 
         // now, do pool RNG
-        uint256 _poolLen = ownerToChunkIndexes[TOKEN_POOL].length;
+        // uint256 _poolLen = ownerToChunkIndexes[TOKEN_POOL].length;
+        uint256 _poolLen = ownerToActiveLength[TOKEN_POOL];
         uint256 _rng = _getRng();
         uint256 _redeemIndex = _rng % _poolLen; // a number between 0 and pool's length - 1
         uint16 _redeemId = ownerToChunkIndexes[TOKEN_POOL][_redeemIndex]; // we found the id
