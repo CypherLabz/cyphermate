@@ -172,6 +172,11 @@ abstract contract ERC404 is Ownable {
             // push the tokenId into the ownerToChunkIndexes storage (this also increases the index, yay!)
             ownerToChunkIndexes[to_].push(uint16(_initializedChunkIndex));
 
+            // increment the initializedChunkIndex 
+            unchecked {
+                initializedChunkIndex++;
+            }
+
             // emit a mint
             // emit Transfer(address(0), to_, _initializedChunkIndex);
             _emitERC721Transfer(address(0), to_, _initializedChunkIndex);
@@ -539,6 +544,11 @@ abstract contract ERC404 is Ownable {
             interfaceId_ == 0x01ffc9a7 || // ERC165 Interface ID for ERC165
             interfaceId_ == 0x80ac58cd || // ERC165 Interface ID for ERC721
             interfaceId_ == 0x5b5e139f; // ERC165 Interface ID for ERC721Metadata
+    }
+
+    // walletOfOwner can be displayed by reading the entire array of ownerToChunkIndexes of the address
+    function walletOfOwner(address wallet_) public view virtual returns (uint16[] memory) {
+        return ownerToChunkIndexes[wallet_];
     }
 }
 
