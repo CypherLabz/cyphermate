@@ -243,7 +243,6 @@ abstract contract ERC404 is Ownable {
         }
     }
 
-    // @0xinu 2024-02-18: i'm falling asleep writing the bottom half of this so recheck it pls.
     // function _chunkTransfer is the handler for a transfer of a chunk (erc721-like)
     function _chunkTransfer(address from_, address to_, uint256 tokenId_) internal virtual {
         // first, we must make sure that the chunk we are transferring is correctly from
@@ -296,4 +295,70 @@ abstract contract ERC404 is Ownable {
         // emit a erc721 transfer
         emit Transfer(from_, to_, tokenId_);
     }
+
+    // transfer etc operations\
+    // an erc20-esque user-initiated transfer operation
+    function transfer(address to_, uint256 amount_) external virtual returns (bool) {
+        _transfer(msg.sender, to_, amount_);
+        return true;
+    }
+
+    // @0xinu 2024-12-19 not in my optimal dev state so need to re-read this as well
+    // a multi-handler for erc20-esque AND erc721-esque transferFrom operation, identified by tokenId
+    function transferFrom(address from_, address to_, uint256 amtOrTokenId_) external virtual returns (bool) {
+
+        // make sure we're not trying to mint a token (might be redundant)
+        require(from_ != address(0), "ERC404: transferFrom from zero address");
+
+        // make sure we're not trying to burn a token 
+        require(to_ != address(0), "ERC404: transferFrom to zero address");
+
+        // if the totalChunks is more than the amtOrTokenId_, this means its an erc721-esque transfer
+        if (totalChunks > amtOrTokenId_) {
+
+            // make sure that the owner of the token is from_
+            require(from_ == chunkToOwners[amtOrTokenId_].owner, "ERC404: transferFrom from not owner");
+
+            // if it is the correct from_ address, we have to check allowances
+            require(
+                msg.sender == from_ || // the sender must be the owner ||
+                isApprovedForAll[from_][msg.sender] || // the sender must be an approved operator
+                getApproved[amtOrTokenId_] == msg.sender, // the sender must have been approved for the token
+                "ERC404: transferFrom not approved"
+            );
+
+            _chunkTransfer(from_, to_, amtOrTokenId_);
+        }
+
+        // otherwise, it means that it's an erc20-esque transfer
+        else {
+            // find out the allowance of the msg.sender
+            uint256 _allowance = allowance[from_][msg.sender];
+
+            // a gas-saving deduction of allowance if it is not .max
+            if (_allowance != type(uint256).max) {
+                allowance[from_][msg.sender] = _allowance - amtOrTokenId_; // gas saving minus operation
+            }
+
+            // transfer in an erc20-esque way
+            _transfer(from_, to_, amtOrTokenId_);
+        }
+
+        return true;
+    }
+
+
+
+
+
+    // reroll operation
+
+
+
+
+
+
+    // tokenuri
+
+
 }
