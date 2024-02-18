@@ -193,8 +193,9 @@ abstract contract ERC404 is Ownable {
                 ownerToChunkIndexes[to_].push(uint16(_initializedChunkIndex));
             }
 
-            // increment the initializedChunkIndex 
+            // increment the initializedChunkIndex and active length
             unchecked {
+                ownerToActiveLength[to_]++;
                 initializedChunkIndex++;
             }
 
@@ -243,6 +244,11 @@ abstract contract ERC404 is Ownable {
 
                 // push tokenId to a new slot
                 ownerToChunkIndexes[to_].push(_tokenId);
+
+                // increase active length
+                unchecked {
+                    ownerToActiveLength[to_]++;
+                }
             }
 
             // now, we also need to remove the token from the pool's indexes
@@ -320,6 +326,22 @@ abstract contract ERC404 is Ownable {
             );
         }
 
+        // if there are no initialized inactive slots for TOKEN_POOL to use
+        else {
+            chunkToOwners[_tokenId] = ChunkInfo(
+                TOKEN_POOL,
+                uint96(_poolInitializedLength)
+            );
+
+            // push tokenId to new slot
+            ownerToChunkIndexes[TOKEN_POOL].push(uint16(_tokenId));
+
+            // increase active length
+            unchecked { 
+                ownerToActiveLength[TOKEN_POOL]++;
+            }
+        }
+
         // emit the pooling transfer
         // emit Transfer(from_, TOKEN_POOL, _tokenId);
         _emitERC721Transfer(from_, TOKEN_POOL, _tokenId);
@@ -330,7 +352,7 @@ abstract contract ERC404 is Ownable {
         // for amount
         for (uint256 i = 0; i < amount_;) {
             // amount_ here the the amount of chunks
-            uint256 _lastIndexFrom = ownerToChunkIndexes[from_].length - 1;
+            uint256 _lastIndexFrom = ownerToActiveLength[from_] - 1;
             uint256 _tokenToSwap = ownerToChunkIndexes[from_][_lastIndexFrom];
 
             // _tokenToSwap is the token that we are going to initate the swap
@@ -363,11 +385,18 @@ abstract contract ERC404 is Ownable {
                 );
 
                 ownerToChunkIndexes[to_].push(uint16(_tokenToSwap));
+
+                // increase active length
+                unchecked {
+                    ownerToActiveLength[to_]++;
+                }
             }
 
             // now, for the sender... 
             // i think we can actually just decrease the active length and that's it
             ownerToActiveLength[from_]--;
+
+            _emitERC721Transfer(from_, to_, _tokenToSwap);
 
             unchecked { ++i; }
         }
@@ -390,6 +419,7 @@ abstract contract ERC404 is Ownable {
         // emit ERC20Transfer(from_, to_, amount_);
         _emitERC20Transfer(from_, to_, amount_);
 
+        // @0xinu this is broken rn, must fix 
         // storage-save-swap gas-optimized erc721-esque transfers
         if (!whitelisted[from_] && !whitelisted[to_]) {
             // do a storage-save-swap of data and then return, so that we don't trigger the bottom conditions
@@ -405,9 +435,8 @@ abstract contract ERC404 is Ownable {
                 // there is the same amount of chunk manipulations of from and to
                 // in addition to that, the chunk difference is over 0
                 // which means that manipulations must be made
-
-
-
+                _swapSlots(from_, to_, _chunkDiffFrom);
+                return;
             }
         }
 
@@ -526,6 +555,11 @@ abstract contract ERC404 is Ownable {
             );
 
             ownerToChunkIndexes[to_].push(uint16(tokenId_));
+
+            // increase active length
+            unchecked { 
+                ownerToActiveLength[to_]++;
+            }
         }
 
         // emit a erc721 transfer
@@ -728,9 +762,19 @@ abstract contract ERC404 is Ownable {
             interfaceId_ == 0x5b5e139f; // ERC165 Interface ID for ERC721Metadata
     }
 
+    function viewAllChunks(address wallet_) public view virtual returns (uint16[] memory) {
+        return ownerToChunkIndexes[wallet_];
+    }
+
     // walletOfOwner can be displayed by reading the entire array of ownerToChunkIndexes of the address
     function walletOfOwner(address wallet_) public view virtual returns (uint16[] memory) {
-        return ownerToChunkIndexes[wallet_];
+        uint256 l = ownerToActiveLength[wallet_];
+        uint16[] memory _tokens = new uint16[] (l);
+        for (uint256 i = 0; i < l;) {
+            _tokens[i] = ownerToChunkIndexes[wallet_][i];
+            unchecked { ++i; }
+        }
+        return _tokens;
     }
 }
 
