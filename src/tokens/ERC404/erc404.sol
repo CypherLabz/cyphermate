@@ -10,18 +10,61 @@ import { Ownable } from "../../access/Ownable.sol";
  * the total token ids are capped at [] which is determined by total supply
  */
 
+/**
+ * About Events *~*~*~*~*
+ * Events <Transfer> and <Approval> have conflicts. However, the amount of indexed 
+ * parameters are different. Thus, we can emit the same signature and use log4 vs log3
+ * in YUL assembly to emit accurate events with the same name and different indexed 
+ * parameters.
+ */
+
 abstract contract ERC404 is Ownable { 
     // so, we do a journey. first, we define the events, which are needed
 
     // ERC20-like
-    event ERC20Transfer(address indexed from, address indexed to, uint256 amount);
-    event Approve(address indexed owner, address indexed spender, uint256 amount);
+    event ERC20Transfer(address indexed from, address indexed to, uint256 amount); // unused, see below
+    event Approval(address indexed owner, address indexed spender, uint256 amount);
 
     // ERC721-like
     event Transfer(address indexed from, address indexed to, uint256 indexed id);
-    event ERC721Approval(address indexed owner, address indexed spender, 
-        uint256 indexed id);
-    event ApprovalForAll(address indexed owner, address indexed operator, bool approved);
+    event ERC721Approval(address indexed owner, address indexed spender, uint256 indexed id); // unused, below
+    
+    event ApprovalForAll(address indexed owner, address indexed operator, bool approved); // used without asm
+
+    // keccak256(abi.encodePacked("Transfer(address,address,uint256)"));
+    bytes32 constant internal TRANSFER_EVENT_SIG =  
+        0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef;
+    
+    // keccak256(abi.encodePacked("Approval(address,address,uint256)"));
+    bytes32 constant internal APPROVAL_EVENT_SIG = 
+        0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925;
+
+    // Event Emitters
+    function _emitERC20Transfer(address from_, address to_, uint256 amount_) internal virtual {
+        assembly {
+            mstore(0x0, amount_)
+            log3(0x0, 0x20, TRANSFER_EVENT_SIG, from_, to_)
+        }
+    }
+
+    function _emitERC721Transfer(address from_, address to_, uint256 tokenId_) internal virtual {
+        assembly {
+            log4(0x0, 0x20, TRANSFER_EVENT_SIG, from_, to_, tokenId_)
+        }
+    }
+
+    function _emitERC20Approval(address owner_, address spender_, uint256 amount_) internal virtual {
+        assembly {
+            mstore(0x0, amount_)
+            log3(0x0, 0x20, APPROVAL_EVENT_SIG, owner_, spender_)
+        }
+    }
+
+    function _emitERC721Approval(address owner_, address spender_, uint256 tokenId_) internal virtual {
+        assembly {
+            log4(0x0, 0x20, APPROVAL_EVENT_SIG, owner_, spender_, tokenId_)
+        }
+    }
 
     // also, we're just gonna define some static metadata of the contract
     string public name;
@@ -72,7 +115,9 @@ abstract contract ERC404 is Ownable {
 
         // do a native erc20-mint to the deployer
         balanceOf[msg.sender] = totalSupply();
-        emit ERC20Transfer(address(0), msg.sender, totalSupply());
+
+        // emit ERC20Transfer(address(0), msg.sender, totalSupply());
+        _emitERC20Transfer(address(0), msg.sender, totalSupply());
     }
 
     // there's no burning for this collection. totalSupply is static. we have an address
@@ -128,7 +173,8 @@ abstract contract ERC404 is Ownable {
             ownerToChunkIndexes[to_].push(uint16(_initializedChunkIndex));
 
             // emit a mint
-            emit Transfer(address(0), to_, _initializedChunkIndex);
+            // emit Transfer(address(0), to_, _initializedChunkIndex);
+            _emitERC721Transfer(address(0), to_, _initializedChunkIndex);
         }
 
         else {
@@ -162,7 +208,8 @@ abstract contract ERC404 is Ownable {
             delete getApproved[_tokenId];
 
             // emit a transfer
-            emit Transfer(TOKEN_POOL, to_, uint256(_tokenId));
+            // emit Transfer(TOKEN_POOL, to_, uint256(_tokenId));
+            _emitERC721Transfer(TOKEN_POOL, to_, uint256(_tokenId));
         }
     }
 
@@ -189,7 +236,8 @@ abstract contract ERC404 is Ownable {
         ownerToChunkIndexes[TOKEN_POOL].push(uint16(_tokenId));
 
         // emit the pooling transfer
-        emit Transfer(from_, TOKEN_POOL, _tokenId);
+        // emit Transfer(from_, TOKEN_POOL, _tokenId);
+        _emitERC721Transfer(from_, TOKEN_POOL, _tokenId);
     }
 
     
@@ -207,7 +255,8 @@ abstract contract ERC404 is Ownable {
             balanceOf[to_] += amount_;
         }
 
-        emit ERC20Transfer(from_, to_, amount_);
+        // emit ERC20Transfer(from_, to_, amount_);
+        _emitERC20Transfer(from_, to_, amount_);
 
         // now, we have some ERC404-specific whitelist+erc721-esque techniques
         // whitelisted addresses dont have pseudo-phantom erc721-esque burns and mints
@@ -259,7 +308,8 @@ abstract contract ERC404 is Ownable {
         }
 
         // emit a erc20 transfer
-        emit ERC20Transfer(from_, to_, chunkSize);
+        // emit ERC20Transfer(from_, to_, chunkSize);
+        _emitERC20Transfer(from_, to_, chunkSize);
 
         // if i understand correctly, whitelisted addresses shouldn't be able to interact
         // with erc721-esque transfers. for non-pooled ever-increasing ID this may be ok but
@@ -293,7 +343,8 @@ abstract contract ERC404 is Ownable {
         ownerToChunkIndexes[to_].push(uint16(tokenId_));
 
         // emit a erc721 transfer
-        emit Transfer(from_, to_, tokenId_);
+        // emit Transfer(from_, to_, tokenId_);
+        _emitERC721Transfer(from_, to_, tokenId_);
     }
 
     // transfer etc operations\
@@ -389,14 +440,18 @@ abstract contract ERC404 is Ownable {
             );
     
             getApproved[amtOrTokenId_] = operator_;
-            emit ERC721Approval(_owner, operator_, amtOrTokenId_);
+
+            // emit ERC721Approval(_owner, operator_, amtOrTokenId_);
+            _emitERC721Approval(_owner, operator_, amtOrTokenId_);
         }
 
         // otherwise, it's an erc20-esque approval (amtOrTokenId_ is out of chunk-range)
         else {
             // do an erc20-esque approval
             allowance[msg.sender][operator_] = amtOrTokenId_;
-            emit Approve(msg.sender, operator_, amtOrTokenId_);
+
+            // emit Approval(msg.sender, operator_, amtOrTokenId_);
+            _emitERC20Approval(msg.sender, operator_, amtOrTokenId_);
         }
 
         return true;
@@ -456,8 +511,10 @@ abstract contract ERC404 is Ownable {
         ownerToChunkIndexes[_owner][_indexToBePooled] = _redeemId;
 
         // now, emit a double transfer, indicating a reroll swap
-        emit Transfer(_owner, TOKEN_POOL, tokenId_); // owner -> pool
-        emit Transfer(TOKEN_POOL, _owner, _redeemId); // pool -> owner
+        // emit Transfer(_owner, TOKEN_POOL, tokenId_); // owner -> pool
+        // emit Transfer(TOKEN_POOL, _owner, _redeemId); // pool -> owner
+        _emitERC721Transfer(_owner, TOKEN_POOL, tokenId_); // owner -> pool
+        _emitERC721Transfer(TOKEN_POOL, _owner, _redeemId); // pool -> owner
     }
 
     // function reroll is the external handler for a user-initiated token reroll. we return a boolean in the fashion of erc20. 
