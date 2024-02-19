@@ -349,6 +349,8 @@ abstract contract ERC404 is Ownable {
 
     function _swapSlots(address from_, address to_, uint256 amount_) internal virtual {
 
+        if (amount_ == 0) return;
+
         // for amount
         for (uint256 i = 0; i < amount_;) {
             // amount_ here the the amount of chunks
@@ -402,6 +404,11 @@ abstract contract ERC404 is Ownable {
         }
     }
     
+    // function _min returns the smaller value between a and b
+    function _min(uint256 a, uint256 b) internal pure returns (uint256) {
+        return a > b ? b : a;
+    }
+
     // function _transfer is the handler for an ERC20-esque transfer
     function _transfer(address from_, address to_, uint256 amount_) internal virtual {
         // grab the balance of from_ and to_ before the balance manipulations
@@ -428,16 +435,43 @@ abstract contract ERC404 is Ownable {
                 (balanceOf[from_] / chunkSize);
 
             uint256 _chunkDiffTo =
-                (balanceOf[to_] / chunkSize);
+                (balanceOf[to_] / chunkSize) -
                 (_startBalTo / chunkSize);
+            
+            uint256 _minDiff = _min(_chunkDiffFrom, _chunkDiffTo);
 
-            if (_chunkDiffFrom == _chunkDiffTo && _chunkDiffFrom > 0) {
-                // there is the same amount of chunk manipulations of from and to
-                // in addition to that, the chunk difference is over 0
-                // which means that manipulations must be made
-                _swapSlots(from_, to_, _chunkDiffFrom);
-                return;
+            _swapSlots(from_, to_, _minDiff);
+
+            // there is an uneven amount of diffs
+            if (_chunkDiffFrom != _chunkDiffTo) {
+                if (_chunkDiffFrom > _chunkDiffTo) {
+                    // more is to be pooled
+                    uint256 _toBePooled = _chunkDiffFrom - _chunkDiffTo;
+                    for (uint256 i = 0; i < _toBePooled;) {
+                        _poolChunk(from_);
+                        unchecked { ++i; }
+                    }
+                }
+
+                if (_chunkDiffTo > _chunkDiffFrom) {
+                    // more is to be mintedOrRedeemed
+                    uint256 _toBeMintedOrRedeemed = _chunkDiffTo - _chunkDiffFrom;
+                    for (uint256 i = 0; i < _toBeMintedOrRedeemed;) {
+                        _mintOrRedeem(to_);
+                        unchecked { ++i; }
+                    }
+                }
             }
+
+            return;
+
+            // if (_chunkDiffFrom == _chunkDiffTo && _chunkDiffFrom > 0) {
+            //     // there is the same amount of chunk manipulations of from and to
+            //     // in addition to that, the chunk difference is over 0
+            //     // which means that manipulations must be made
+            //     _swapSlots(from_, to_, _chunkDiffFrom);
+            //     return;
+            // }
         }
 
         // now, we have some ERC404-specific whitelist+erc721-esque techniques
