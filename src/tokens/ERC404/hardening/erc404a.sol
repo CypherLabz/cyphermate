@@ -2,7 +2,7 @@
 // Last update: 2024-02-18
 pragma solidity ^0.8.20;
 
-import { Ownable } from "../../access/Ownable.sol";
+import { Ownable } from "../../../access/Ownable.sol";
 
 /**
  * ERC404 with a system of uninitialized and initialized array or mapping
@@ -367,7 +367,7 @@ abstract contract ERC404 is Ownable {
                 // first, swap out the owner in chunkToOwners
                 chunkToOwners[_tokenToSwap] = ChunkInfo(
                     to_,
-                    uint96(_lastActiveLengthTo + 1)
+                    uint96(_lastActiveLengthTo + 1) // I dont think this should have +1
                 );
 
                 // increase the active length
@@ -376,7 +376,7 @@ abstract contract ERC404 is Ownable {
                 }
 
                 // and lastly, change the tokenId at the index
-                ownerToChunkIndexes[to_][_lastActiveLengthTo + 1] = uint16(_tokenToSwap);
+                ownerToChunkIndexes[to_][_lastActiveLengthTo + 1] = uint16(_tokenToSwap); // or this
             }
 
             // if there are no avaialble initialized indexes, we do a push operation
@@ -397,6 +397,8 @@ abstract contract ERC404 is Ownable {
             // now, for the sender... 
             // i think we can actually just decrease the active length and that's it
             ownerToActiveLength[from_]--;
+
+            // forgot delete getApproved here
 
             _emitERC721Transfer(from_, to_, _tokenToSwap);
 
@@ -426,7 +428,6 @@ abstract contract ERC404 is Ownable {
         // emit ERC20Transfer(from_, to_, amount_);
         _emitERC20Transfer(from_, to_, amount_);
 
-        // @0xinu this is broken rn, must fix 
         // storage-save-swap gas-optimized erc721-esque transfers
         if (!whitelisted[from_] && !whitelisted[to_]) {
             // do a storage-save-swap of data and then return, so that we don't trigger the bottom conditions
@@ -608,7 +609,6 @@ abstract contract ERC404 is Ownable {
         return true;
     }
 
-    // @0xinu 2024-12-19 not in my optimal dev state so need to re-read this as well
     // a multi-handler for erc20-esque AND erc721-esque transferFrom operation, identified by tokenId
     function transferFrom(address from_, address to_, uint256 amtOrTokenId_) public virtual returns (bool) {
 
