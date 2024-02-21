@@ -5,7 +5,6 @@ pragma solidity ^0.8.20;
 import { Ownable } from "../../access/Ownable.sol";
 
 // Reroll -> Random
-
 // Royalties on a Trade to royalty receiver.
 // Trade -> Pick and choose + pay royalties.
 
@@ -71,6 +70,8 @@ abstract contract ERC404 is Whitelistable {
     }
 
     event ApprovalForAll(address indexed owner, address indexed operator, bool approved);
+    event PoolSwapRoyaltiesReceiverSet(address indexed operator, address indexed receiver);
+    event PoolSwapRoyaltiesFeeSet(address indexed operator, uint256 fee_);
 
     /////////////////////////////////
     // Collection Metadata //////////
@@ -129,24 +130,14 @@ abstract contract ERC404 is Whitelistable {
     // Constructor //////////////////
     /////////////////////////////////
 
-    // initializeSupply mints the total supply of ERC20 without ERC721s to the owner.
-    // It can only be done if ERC721s have never been minted.
-    // Useful if you are doing the [whitelist] -> [create LP] route.
-    // Note: IF there is a different ERC20-balance manipulation, this could cause the actual 
-    // total supply of the tokens to exceed totalSupply();
-    function initializeSupply() public onlyOwner {
-        require(initializedChunkIndex == 0, "ERC404: Already minted chunks");
-        balanceOf[msg.sender] = totalSupply();
-        _emitERC721Transfer(address(0), msg.sender, totalSupply());
-    }
-
     constructor(string memory name_, string memory symbol_) {
         name = name_;
         symbol = symbol_;
 
         // Natively, ERC404 sets the balance of the token to the deployer.
         // The ERC721 NFTs are not minted alongside it and will mint on the first transfer.
-        initializeSupply();
+        balanceOf[msg.sender] = totalSupply();
+        _emitERC721Transfer(address(0), msg.sender, totalSupply());
     }
 
     /////////////////////////////////
@@ -752,7 +743,6 @@ abstract contract ERC404 is Whitelistable {
     }
 }
 
-
 abstract contract ERC721TokenReceiver {
     function onERC721Received(
         address, // operator
@@ -761,5 +751,77 @@ abstract contract ERC721TokenReceiver {
         bytes calldata // data
     ) external virtual returns (bytes4) {
         return ERC721TokenReceiver.onERC721Received.selector;
+    }
+}
+
+abstract contract ERC404PoolSwap is ERC404 {
+
+    // ERC404 poolSwap contract-enforced optional royalties. Default set to 0.
+    address public poolSwapRoyaltiesReceiver;
+    uint256 public poolSwapRoyaltiesFee; // Denoted in 1/100 of a % per unit
+
+    // ERC404 poolSwap ownable configurations
+    function setPoolSwapRoyaltiesReceiver(address receiver_) public virtual onlyOwner {
+        poolSwapRoyaltiesReceiver = receiver_;
+        emit PoolSwapRoyaltiesReceiverSet(msg.sender, receiver_);
+    }
+
+    // 1/100 of a % per unit. For example, 1% fee is 100
+    function setPoolSwapRoyaltiesFee(uint256 fee_) public virtual onlyOwner {
+        poolSwapRoyaltiesFee = fee_;
+        emit PoolSwapRoyaltiesFeeSet(msg.sender, fee_);
+    }
+
+    // function _swap is the internal handler for a swap operation
+    function _swap(uint256 fromId_, uint256 toId_) internal virtual {
+
+        // Firstly, fromId_'s owner must not be address(0)
+        address _ownerFrom = chunkToOwners[fromId_].owner;
+        require(_ownerFrom != address(0), "ERC404: _swap from nonexistent token");
+
+        // Secondly, toId_'s owner must be the TOKEN_POOL
+        address _ownerTo = chunkToOwners[toId_].owner;
+        require(_ownerTo == TOKEN_POOL, "ERC404: _swap to not owned by pool");
+
+        // Next, we calculate the total cost of the swap, and check balances.
+        // Note: the deduction of fee must not result in a different chunkDiff
+        // We can safely assume that if _ownerFrom is owned by owner, then 
+        // the owner must have at least 1 chunk's worth of tokens.
+        uint256 _availableRemainderFrom = balanceOf[_ownerFrom] % chunkSize;
+        uint256 _swapFee = (chunkSize / 100_000) * poolSwapRoyaltiesFee;
+        require(_availableRemainderFrom > _swapFee, "ERC404: _swap not enough remainder");
+
+        // Transfer _swapFee to the royalties receiver
+        // Edge case: this could result in < totalChunk amount of dust tokens to a balance
+        balanceOf[_ownerFrom] -= _swapFee;
+
+        unchecked { 
+            balanceOf[poolSwapRoyaltiesReceiver] += _swapFee;
+        }
+
+        _emitERC20Transfer(_ownerFrom, poolSwapRoyaltiesReceiver, _swapFee);
+
+        // Now, swap the chunks! ...Find their indexes!
+        uint256 _indexFrom = chunkToOwners[fromId_].index;
+        uint256 _indexTo = chunkToOwners[toId_].index;
+
+        // Swap their ownership data!
+        chunkToOwners[fromId_] = ChunkInfo(
+            TOKEN_POOL,
+            uint16(_indexTo)
+        );
+
+        chunkToOwners[toId_] = ChunkInfo(
+            _ownerFrom,
+            uint16(_indexFrom)
+        );
+
+        // Swap their indexes!
+        ownerToChunkIndexes[_ownerFrom][_indexFrom] = uint16(toId_);
+        ownerToChunkIndexes[TOKEN_POOL][_indexTo] = uint16(fromId_);
+
+        // Emit the swaps!
+        _emitERC721Transfer(_ownerFrom, TOKEN_POOL, fromId_);
+        _emitERC721Transfer(TOKEN_POOL, _ownerFrom, toId_);
     }
 }
