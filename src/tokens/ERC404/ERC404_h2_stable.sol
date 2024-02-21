@@ -14,8 +14,6 @@ import { Ownable } from "../../access/Ownable.sol";
 // Test: whitelist to non-whitelist then action
 // Test: what if some are whitelisted some are non-whitelisted and then there are an uneven amount of pooled vs held tokens because of it, does it mess something up?
 
-// ALL ITEMS ABOVE DONE BABY
-
 // Whitelistable is a supplimentary contract for ERC404 with whitelisting enabled
 abstract contract Whitelistable is Ownable {
 
@@ -195,7 +193,7 @@ abstract contract ERC404 is Whitelistable {
                 }
 
                 // Finally, we set the minted tokenId to the reactivated array slot
-                ownerToChunkIndexes[to_][_lastActiveLengthTo] = uint16(_initializedChunkIndex);
+                ownerToChunkIndexes[to_][_lastActiveLengthTo + 1] = uint16(_initializedChunkIndex);
             }
 
             else {
@@ -285,11 +283,7 @@ abstract contract ERC404 is Whitelistable {
     // function _poolChunk takes a user's chunk and puts it into a FILO queue
     function _poolChunk(address from_) internal virtual {
         // Find the FILO tokenId for the address based on the active length
-        uint256 _activeLengthFrom = ownerToActiveLength[from_];
-
-        if (_activeLengthFrom == 0) return; 
-
-        uint256 _lastIndex = _activeLengthFrom - 1;
+        uint256 _lastIndex = ownerToActiveLength[from_] - 1;
         uint256 _tokenId = ownerToChunkIndexes[from_][_lastIndex];
 
         // Decrease the owner's active length 
@@ -413,8 +407,7 @@ abstract contract ERC404 is Whitelistable {
         // ERC721-esque transfer with ERC404 flow logic.
         // Here, we first check if from_ and to_ are whitelisted. 
         // If both aren't, we can just swap slots to save gas.
-        // if (!whitelisted[from_] && !whitelisted[to_]) {
-        if (ownerToActiveLength[from_] > 0 && !whitelisted[to_]) {
+        if (!whitelisted[from_] && !whitelisted[to_]) {
             // We will use _swapSlot flow and then return before the subsequent flow
             uint256 _chunkDiffFrom = 
                 (_startBalFrom / chunkSize) - 
@@ -423,9 +416,6 @@ abstract contract ERC404 is Whitelistable {
             uint256 _chunkDiffTo = 
                 (balanceOf[to_] / chunkSize) - 
                 (_startBalTo / chunkSize);
-
-            // @0xinu: im passing out. handle wl->nwl nwl->wl cases
-            _chunkDiffFrom = _min(_chunkDiffFrom, ownerToActiveLength[from_]);
             
             // We grab the lowest chunk difference to do _swapSlot
             uint256 _minDiff = _min(_chunkDiffFrom, _chunkDiffTo);
@@ -463,8 +453,7 @@ abstract contract ERC404 is Whitelistable {
 
         // Handle individual from_ and to_ cases.
         // If from_ is not whitelisted, we will pool his chunks.
-        // if (!whitelisted[from_] && ownerToActiveLength[from_] > 0) {
-        if (ownerToActiveLength[from_] > 0) {
+        if (!whitelisted[from_]) {
             uint256 _chunkDiffFrom = 
                 (_startBalFrom / chunkSize) - 
                 (balanceOf[from_] / chunkSize);
