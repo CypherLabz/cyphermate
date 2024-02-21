@@ -8,16 +8,20 @@ import { Ownable } from "../../access/Ownable.sol";
 // Royalties on a Trade to royalty receiver.
 // Trade -> Pick and choose + pay royalties.
 
-// Figure out the wrapper version
-// Figure out - contracts are whitelisted by default, unless activated by contract-initiated call
-
 // Test: whitelist to non-whitelist then action
 // Test: what if some are whitelisted some are non-whitelisted and then there are an uneven amount of pooled vs held tokens because of it, does it mess something up?
 
 // ALL ITEMS ABOVE DONE BABY
 
+// Figure out the wrapper version
+// Figure out - contracts are whitelisted by default, unless activated by contract-initiated call
+
 // Now, do:
 // Contracts = WL by default unless triggered
+
+// And do:
+// Convert initialized-balance-on-mint to _mintERC20 and _mintERC721
+// Optional implement a burn system (required for wrapper version anyway)
 
 // After that do:
 // TokenId can be customizable over starting at 0 (ARrraRarrARRarrGGGhhgHrhah)
@@ -25,13 +29,27 @@ import { Ownable } from "../../access/Ownable.sol";
 // Whitelistable is a supplimentary contract for ERC404 with whitelisting enabled
 abstract contract Whitelistable is Ownable {
 
-    event Whitelisted(address indexed target, bool indexed allowed);
+    // We're renovating the owner-initiated whitelist manipulation to allow user-initiated as well
+    // For EOA, chunk stacking is ON by default
+    // For Contracts, chunk stacking is OFF by defailt
+
+    // code here inu <hes passing out still>
+
+    event Whitelisted(address indexed operator, address indexed target, bool indexed allowed);
 
     mapping(address => bool) public whitelisted;
-
-    function addToWhitelist(address target_, bool allowed_) public onlyOwner {
+    
+    function _setTargetWhitelist(address target_, bool allowed_) internal virtual {
         whitelisted[target_] = allowed_;
-        emit Whitelisted(target_, allowed_);
+        emit Whitelisted(msg.sender, target_, allowed_);
+    }
+
+    function setTargetWhitelist(address target_, bool allowed_) public virtual onlyOwner {
+        _setTargetWhitelist(target_, allowed_);
+    }
+
+    function addToWhitelist(bool allowed_) public virtual {
+        _setTargetWhitelist(msg.sender, allowed_);
     }
 }
 
