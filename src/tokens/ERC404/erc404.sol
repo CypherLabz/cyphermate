@@ -329,6 +329,7 @@ abstract contract ERC404 is Whitelistable {
         _emitERC721Transfer(from_, TOKEN_POOL, _tokenId);
     }
 
+    // @0xinu: handle whitelist turned non-whitelist case where ownerToActiveLength is 0 or lower than actual balanceOf in chunks
     // _swapSlots is used when there is both a sender and receiver. amount_ is loops.
     function _swapSlots(address from_, address to_, uint256 amount_) internal virtual {
 
@@ -794,6 +795,7 @@ abstract contract ERC404PoolSwap is ERC404 {
 
         // Transfer _swapFee to the royalties receiver
         // Edge case: this could result in < totalChunk amount of dust tokens to a balance
+        // Edge case: this could result in a chunkDiff that does not redeem a chunk
         balanceOf[_ownerFrom] -= _swapFee;
 
         unchecked { 
@@ -824,5 +826,13 @@ abstract contract ERC404PoolSwap is ERC404 {
         // Emit the swaps!
         _emitERC721Transfer(_ownerFrom, TOKEN_POOL, fromId_);
         _emitERC721Transfer(TOKEN_POOL, _ownerFrom, toId_);
+    }
+
+    // function swap is the public handler for a user-initiated swap 
+    function swap(uint256 fromId_, uint256 toId_) public virtual returns (bool) {
+        address _ownerFrom = chunkToOwners[fromId_].owner;
+        require(_ownerFrom == msg.sender, "ERC404: swap not from owner");
+        _swap(fromId_, toId_);
+        return true;
     }
 }
