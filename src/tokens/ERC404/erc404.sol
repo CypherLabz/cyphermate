@@ -4,8 +4,9 @@ pragma solidity ^0.8.20;
 
 import { Ownable } from "../../access/Ownable.sol";
 
-// Royalties on a Trade to royalty receiver.
 // Reroll -> Random
+
+// Royalties on a Trade to royalty receiver.
 // Trade -> Pick and choose + pay royalties.
 
 // Figure out the wrapper version
@@ -670,7 +671,85 @@ abstract contract ERC404 is Whitelistable {
         return _owner;
     }
 
+    // function _reroll is an internal function that handles token rerolls from the pool.
+    // _reroll does not have any ERC20 transfers as it is not needed. 
+    // _reroll reuses the same storage slots, so there are no pushes ever required.
+    function _reroll(uint256 tokenId_) internal virtual {
+        // The token must exist
+        address _owner = chunkToOwners[tokenId_].owner;
+        require(_owner != address(0), "ERC404: _reroll nonexistent token");
 
+        // Figure out the index of the token to be pooled and their data replaced.
+        uint256 _tokenIndex = chunkToOwners[tokenId_].index;
+
+        // Now, roll the RNG for the pool's tokens
+        uint256 _rng = _getRNG();
+        uint256 _poolLen = ownerToActiveLength[TOKEN_POOL];
+        uint256 _redeemIndex = _rng % _poolLen; // a number between 0 and _poolLen - 1
+        uint16 _redeemId = ownerToChunkIndexes[TOKEN_POOL][_redeemIndex];
+
+        // Replace the _owner's token index with _redeemId, and vice versa
+        ownerToChunkIndexes[_owner][_tokenIndex] = _redeemId;
+        ownerToChunkIndexes[TOKEN_POOL][_redeemIndex] = uint16(tokenId_);
+
+        // Now, update the chunk storage to the new owners and indexes
+        chunkToOwners[tokenId_] = ChunkInfo(
+            TOKEN_POOL,
+            uint16(_redeemIndex)
+        );
+
+        chunkToOwners[_redeemId] = ChunkInfo(
+            _owner,
+            uint16(_tokenIndex)
+        );
+
+        // Emit the transfers between the _owner and the pool
+        _emitERC721Transfer(_owner, TOKEN_POOL, tokenId_); 
+        _emitERC721Transfer(TOKEN_POOL, _owner, _redeemId);
+    }
+
+    // function reroll is the public function that handles rerolls. Owner-initated only.
+    // We also return a boolean true, in ERC20 fashion.
+    function reroll(uint256 tokenId_) public virtual returns (bool) {
+        // Optionally, we can add isApprovedForAll too, but we choose not to.
+        address _owner = chunkToOwners[tokenId_].owner;
+        require(_owner == msg.sender, "ERC404: reroll not from owner");
+        _reroll(tokenId_);
+        return true;
+    }
+
+    // function tokenURI needs to be implemented 
+    function tokenURI(uint256 tokenId_) public virtual view returns (string memory);
+
+    // function supportsInterface for ERC165 support. Currently uses ERC721 interfaces. 
+    function supportsInterface(bytes4 interfaceId_) public view virtual returns (bool) {
+        return
+            interfaceId_ == 0x01ffc9a7 || // ERC165 Interface ID for ERC165
+            interfaceId_ == 0x80ac58cd || // ERC165 Interface ID for ERC721
+            interfaceId_ == 0x5b5e139f; // ERC165 Interface ID for ERC721Metadata
+    }
+
+    // function viewAllStorageSlots returns the entire storage array for an address.
+    // Note: this returns both the active and initialized-but-unused slots. 
+    function viewAllStorageSlots(address wallet_) public virtual view returns (uint16[] memory) {
+        return ownerToChunkIndexes[wallet_];
+    }
+
+    // function balanceOfChunks returns the balance of chunks for a wallet
+    function balanceOfChunks(address wallet_) public virtual view returns (uint256) {
+        return ownerToActiveLength[wallet_];
+    }
+
+    // function walletOfOwner returns the active slots of ownerToChunkIndexes
+    function walletOfOwner(address wallet_) public virtual view returns (uint16[] memory) {
+        uint256 l = ownerToActiveLength[wallet_];
+        uint16[] memory _chunks = new uint16[] (l);
+        for (uint256 i = 0; i < l;) {
+            _chunks[i] = ownerToChunkIndexes[wallet_][i];
+            unchecked { ++i; }
+        }
+        return _chunks;
+    }
 }
 
 
