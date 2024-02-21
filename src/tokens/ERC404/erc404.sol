@@ -12,6 +12,7 @@ import { Ownable } from "../../access/Ownable.sol";
 // Figure out - contracts are whitelisted by default, unless activated by contract-initiated call
 
 // Test: whitelist to non-whitelist then action
+// Test: what if some are whitelisted some are non-whitelisted and then there are an uneven amount of pooled vs held tokens because of it, does it mess something up?
 
 // Whitelistable is a supplimentary contract for ERC404 with whitelisting enabled
 abstract contract Whitelistable is Ownable {
