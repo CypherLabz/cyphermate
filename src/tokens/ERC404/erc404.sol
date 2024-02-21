@@ -31,25 +31,42 @@ abstract contract Whitelistable is Ownable {
 
     // We're renovating the owner-initiated whitelist manipulation to allow user-initiated as well
     // For EOA, chunk stacking is ON by default
-    // For Contracts, chunk stacking is OFF by defailt
+    // For Contracts, chunk stacking is OFF by default
+    // We've written the logic to account for activeLength dips and overs from WL->NWL NWL->WL situations
+    event SetChunkSwitch(address indexed operator, address indexed target, bool indexed toggle);
 
-    // code here inu <hes passing out still>
+    // chunkToggle as a switch.  
+    // If you are an EOA, FALSE means that you are processing chunks. So you will mint NFTs
+    // If you are a smart contract, FALSE means you are NOT processing chunks.
+    // This means if you are a smart contract and you want to handle chunks, 
+    // Call toggleChunkProcessing from your contract to this contract.
+    mapping(address => bool) public chunkToggle;
 
-    event Whitelisted(address indexed operator, address indexed target, bool indexed allowed);
-
-    mapping(address => bool) public whitelisted;
-    
-    function _setTargetWhitelist(address target_, bool allowed_) internal virtual {
-        whitelisted[target_] = allowed_;
-        emit Whitelisted(msg.sender, target_, allowed_);
+    // _isChunkProcessor returns whether or not we should process chunks for the address
+    // If the target is an EOA, it will return the flip of chunkToggle (default true)
+    // If the target is a contract, it will return the chunkToggle (default false)
+    function _isChunkProcessor(address target_) internal virtual view returns (bool) {
+        return target_.code.length == 0 ? !chunkToggle[target_] : chunkToggle[target_];
     }
 
-    function setTargetWhitelist(address target_, bool allowed_) public virtual onlyOwner {
-        _setTargetWhitelist(target_, allowed_);
+    function toggleChunkProcessing(bool processChunks_) public virtual {
+        // If they are an EOA, flip the condition around. 
+        // This is just for human-understandable input. 
+        // This means that the same boolean argument will result in the same condition
+        // for both EOAs and smart contracts.
+        // Note: we can use codeSize to allow contract constructor calling without
+        // implementing a interface method in the logic through .call
+        bool boolToSet_ = msg.sender == tx.origin ? !processChunks_ : processChunks_;
+        
+        // Set the toggle and emit the event
+        chunkToggle[msg.sender] = boolToSet_;
+        emit SetChunkSwitch(msg.sender, msg.sender, boolToSet_);
     }
 
-    function addToWhitelist(bool allowed_) public virtual {
-        _setTargetWhitelist(msg.sender, allowed_);
+    function setChunkProcessingFor(address target_, bool processChunks_) public virtual onlyOwner {
+        bool boolToSet_ = target_.code.length == 0 ? !processChunks_ : processChunks_;
+        chunkToggle[target_] = boolToSet_;
+        emit SetChunkSwitch(msg.sender, target_, processChunks_);
     }
 }
 
@@ -437,8 +454,8 @@ abstract contract ERC404 is Whitelistable {
         // ERC721-esque transfer with ERC404 flow logic.
         // Here, we first check if from_ and to_ are whitelisted. 
         // If both aren't, we can just swap slots to save gas.
-        // if (!whitelisted[from_] && !whitelisted[to_]) {
-        if (ownerToActiveLength[from_] > 0 && !whitelisted[to_]) {
+        // if (!whitelisted[from_] && !_isChunkProcessor(to_)) {
+        if (ownerToActiveLength[from_] > 0 && !_isChunkProcessor(to_)) {
             // We will use _swapSlot flow and then return before the subsequent flow
             uint256 _chunkDiffFrom = 
                 (_startBalFrom / chunkSize) - 
@@ -502,7 +519,7 @@ abstract contract ERC404 is Whitelistable {
         }
 
         // If to_ is not whitelisted, we will redeem chunks for him.
-        if (!whitelisted[to_]) {
+        if (!_isChunkProcessor(to_)) {
             uint256 _chunkDiffTo = 
                 (balanceOf[to_] / chunkSize) - 
                 (_startBalTo / chunkSize); 
@@ -537,10 +554,11 @@ abstract contract ERC404 is Whitelistable {
 
         _emitERC20Transfer(from_, to_, chunkSize);
 
-        // Now, since whitelisted addresses can't handle ERC721-chunks
-        // We're not gonna allow transfers of chunks to them either.
-        require(!whitelisted[from_], "ERC404: _chunkTransfer from whitelisted");
-        require(!whitelisted[to_], "ERC404: _chunkTransfer to whitelisted");
+        // @0xinu: 20240221: I'm removing this because we can handle uneven activeLength cases etc. now. But we need to test it.
+        // // Now, since whitelisted addresses can't handle ERC721-chunks
+        // // We're not gonna allow transfers of chunks to them either.
+        // require(!whitelisted[from_], "ERC404: _chunkTransfer from whitelisted");
+        // require(!_isChunkProcessor(to_), "ERC404: _chunkTransfer to whitelisted");
 
         // Now, find the index of the tokenId_, and push it out of active state.
         uint16 _tokenIndex = chunkToOwners[tokenId_].index;
