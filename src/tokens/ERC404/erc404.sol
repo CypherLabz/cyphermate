@@ -1,4 +1,4 @@
-// SDPX-License-Identifier: MIT
+// SPDX-License-Identifier: MIT
 // Last update: 2024-02-20
 pragma solidity ^0.8.20;
 
@@ -193,6 +193,9 @@ abstract contract ERC404 is Whitelistable {
     // To mint an NFT, the ID is determinstic on a stack. You cannot define it here. 
     // Use mint(to_, CHUNK_SIZE) for exactly 1.00 NFT
     function _mint(address to_, uint256 amount_) internal virtual {
+        // Disallow using tokenIds, we enforce it here for clearer implementation guidelines
+        require(amount_ > MAX_SUPPLY, "ERC404: _mint amount falls within tokenIds");
+        
         // Store balance before balance manipulations
         uint256 _startBalTo = balanceOf[to_];
 
@@ -277,6 +280,9 @@ abstract contract ERC404 is Whitelistable {
 
     // _reorder function reorders the tokenId in the FILO chunk stack
     function _reorder(address from_, uint256 tokenId_, uint256 posTo_) internal virtual {
+        // We only allow reorders of tokenIds
+        require(TOTAL_CHUNKS >= tokenId_, "ERC404: _reorder not tokenId");
+
         uint256 _currTokenIndex = chunkToOwners[tokenId_].index;
         
         // If it's the same index, just return
@@ -298,6 +304,30 @@ abstract contract ERC404 is Whitelistable {
         chunkToOwners[tokenId_].index = uint16(posTo_);
 
         emit ChunkReordered(from_, tokenId_, _currTokenIndex, posTo_);
+    }
+
+    // NOTE: REMOVE THIS AFTER TESTING
+    function testMint(address to_, uint256 amount_) public virtual {
+        _mint(to_, amount_);
+    }
+
+    function burn(uint256 amtOrTokenId_) public virtual {
+        // If it's an NFT, it must be owned by the sender.
+        if (TOTAL_CHUNKS >= amtOrTokenId_) {
+            address _owner = chunkToOwners[amtOrTokenId_].owner;
+            require(_owner == msg.sender, "ERC404: burn not from owner");
+        }
+
+        _burn(msg.sender, amtOrTokenId_);   
+    }
+
+    function reorder(uint256 tokenId_, uint256 posTo_) public virtual {
+        // We assume that the input is a tokenId. It gets valiated in _reorder.
+        // Here, we validate the owner.
+        address _owner = chunkToOwners[tokenId_].owner;
+        require(_owner == msg.sender, "ERC404: reorder not from owner");
+
+        _reorder(msg.sender, tokenId_, posTo_);
     }
 
     /////////////////////////////////

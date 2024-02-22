@@ -2,7 +2,7 @@
 // Last update: 2024-02-18
 pragma solidity ^0.8.20;
 
-import { Ownable } from "../../access/Ownable.sol";
+import { Ownable } from "../../../access/Ownable.sol";
 
 /**
  * ERC404 with a system of uninitialized and initialized array or mapping
