@@ -1185,5 +1185,8 @@ abstract contract ERC404Wrapper is ERC404PoolSwap {
         }
 
         _emitERC721Transfer(msg.sender, address(0), tokenId_);
+
+        // Transfer the NFT back to the unwrapper
+        IERC721(ERC721_INTERFACE).transferFrom(address(this), msg.sender, tokenId_);
     }
 }
