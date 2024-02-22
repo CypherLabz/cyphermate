@@ -167,14 +167,14 @@ abstract contract ERC404 is Whitelistable {
     // ChunkInfo packs the owner and the index of the token in one 
     struct ChunkInfo {
         address owner;
-        uint16 index;
+        uint32 index;
     }
 
     // chunkToOwners is the equivalent of _owners or _ownerOf 
     mapping(uint256 => ChunkInfo) public chunkToOwners;
 
     // Chunk stack tracking for an owner. This is used on transfer, pool/burn, and redeem/mint operations
-    mapping(address => uint16[]) public ownerToChunkIndexes;
+    mapping(address => uint32[]) public ownerToChunkIndexes;
 
     // Active length tracking for an owner. This enables us to reuse initialized array slots instead of popping them.
     mapping(address => uint256) public ownerToActiveLength;
@@ -306,13 +306,13 @@ abstract contract ERC404 is Whitelistable {
         require(_activeIndex >= posTo_, "ERC404: _reorder out of bounds");
 
         // swap the positions of tokenId_ and posTo_ internally
-        uint16 _tokenIdAtPosToBefore = ownerToChunkIndexes[from_][posTo_];
+        uint32 _tokenIdAtPosToBefore = ownerToChunkIndexes[from_][posTo_];
         ownerToChunkIndexes[from_][_currTokenIndex] = _tokenIdAtPosToBefore;
-        ownerToChunkIndexes[from_][posTo_] = uint16(tokenId_);
+        ownerToChunkIndexes[from_][posTo_] = uint32(tokenId_);
 
         // now, rewrite the location lookup at chunk data
-        chunkToOwners[_tokenIdAtPosToBefore].index = uint16(_currTokenIndex);
-        chunkToOwners[tokenId_].index = uint16(posTo_);
+        chunkToOwners[_tokenIdAtPosToBefore].index = uint32(_currTokenIndex);
+        chunkToOwners[tokenId_].index = uint32(posTo_);
 
         emit ChunkReordered(from_, tokenId_, _currTokenIndex, posTo_);
     }
@@ -384,7 +384,7 @@ abstract contract ERC404 is Whitelistable {
                 // First, set the new owner and index of the token. The index will be the current active length.
                 chunkToOwners[_initializedChunkIndex] = ChunkInfo(
                     to_, 
-                    uint16(_lastActiveLengthTo)
+                    uint32(_lastActiveLengthTo)
                 );
 
                 // Then, we increment the active length
@@ -393,7 +393,7 @@ abstract contract ERC404 is Whitelistable {
                 }
 
                 // Finally, we set the minted tokenId to the reactivated array slot
-                ownerToChunkIndexes[to_][_lastActiveLengthTo] = uint16(_initializedChunkIndex);
+                ownerToChunkIndexes[to_][_lastActiveLengthTo] = uint32(_initializedChunkIndex);
             }
 
             else {
@@ -401,7 +401,7 @@ abstract contract ERC404 is Whitelistable {
                 // First, set the new owner and index of the token. The index will be the current total length.
                 chunkToOwners[_initializedChunkIndex] = ChunkInfo(
                     to_,
-                    uint16(_totalLengthTo)
+                    uint32(_totalLengthTo)
                 );
 
                 // Then, we increment the active length
@@ -410,7 +410,7 @@ abstract contract ERC404 is Whitelistable {
                 }
 
                 // Finally, we push the minted tokenId to the newly initialized array slot
-                ownerToChunkIndexes[to_].push(uint16(_initializedChunkIndex));
+                ownerToChunkIndexes[to_].push(uint32(_initializedChunkIndex));
             }
 
             // Afterwards, increment the initialized chunk index
@@ -427,7 +427,7 @@ abstract contract ERC404 is Whitelistable {
             // We're fully initialized, so we will redeem a token from the pool.
             // Find the active index of the pool, and use that as the next token to receive
             uint256 _redeemIndex = ownerToActiveLength[TOKEN_POOL] - 1;
-            uint16 _tokenId = ownerToChunkIndexes[TOKEN_POOL][_redeemIndex]; 
+            uint32 _tokenId = ownerToChunkIndexes[TOKEN_POOL][_redeemIndex]; 
 
             // Chunk index optimization - use slots if available
             uint256 _totalLengthTo = ownerToChunkIndexes[to_].length;
@@ -439,7 +439,7 @@ abstract contract ERC404 is Whitelistable {
                 // Ownership change of chunk
                 chunkToOwners[_tokenId] = ChunkInfo(
                     to_,
-                    uint16(_lastActiveLengthTo)
+                    uint32(_lastActiveLengthTo)
                 );
 
                 // Increment active length
@@ -456,7 +456,7 @@ abstract contract ERC404 is Whitelistable {
                 // Ownership change of chunk
                 chunkToOwners[_tokenId] = ChunkInfo(
                     to_,
-                    uint16(_totalLengthTo)
+                    uint32(_totalLengthTo)
                 );
 
                 // Increment active length
@@ -505,28 +505,28 @@ abstract contract ERC404 is Whitelistable {
             // We use available slot
             chunkToOwners[_tokenId] = ChunkInfo(
                 pool_,
-                uint16(_activeLength)
+                uint32(_activeLength)
             );
 
             unchecked { 
                 ownerToActiveLength[pool_]++;
             }
 
-            ownerToChunkIndexes[pool_][_activeLength] = uint16(_tokenId);
+            ownerToChunkIndexes[pool_][_activeLength] = uint32(_tokenId);
         }
 
         else {
             // We initialize a new slot
             chunkToOwners[_tokenId] = ChunkInfo(
                 pool_,
-                uint16(_totalLength)
+                uint32(_totalLength)
             );
 
             unchecked {
                 ownerToActiveLength[pool_]++;
             }
 
-            ownerToChunkIndexes[pool_].push(uint16(_tokenId));
+            ownerToChunkIndexes[pool_].push(uint32(_tokenId));
         }
 
         // Emit ERC721 Transfer
@@ -551,28 +551,28 @@ abstract contract ERC404 is Whitelistable {
                 // Use the available slots
                 chunkToOwners[_tokenToSwap] = ChunkInfo(
                     to_,
-                    uint16(_activeLengthTo)
+                    uint32(_activeLengthTo)
                 );
 
                 unchecked { 
                     ownerToActiveLength[to_]++;
                 }
 
-                ownerToChunkIndexes[to_][_activeLengthTo] = uint16(_tokenToSwap);
+                ownerToChunkIndexes[to_][_activeLengthTo] = uint32(_tokenToSwap);
             }
 
             else {
                 // Initialize a new slot
                 chunkToOwners[_tokenToSwap] = ChunkInfo(
                     to_,
-                    uint16(_totalLengthTo)
+                    uint32(_totalLengthTo)
                 );
 
                 unchecked {
                     ownerToActiveLength[to_]++;
                 }
 
-                ownerToChunkIndexes[to_].push(uint16(_tokenToSwap));
+                ownerToChunkIndexes[to_].push(uint32(_tokenToSwap));
             }
 
             // Decrease active length of from
@@ -718,7 +718,7 @@ abstract contract ERC404 is Whitelistable {
         // require(_isChunkProcessor(to_), "ERC404: _chunkTransfer to whitelisted");
 
         // Now, find the index of the tokenId_, and push it out of active state.
-        uint16 _tokenIndex = chunkToOwners[tokenId_].index;
+        uint32 _tokenIndex = chunkToOwners[tokenId_].index;
         uint256 _lastActiveIndexFrom = ownerToActiveLength[from_] - 1;
 
         // If the token index is not the last, replace it with the last index.
@@ -744,28 +744,28 @@ abstract contract ERC404 is Whitelistable {
         if (_totalLengthTo > _activeLengthTo) {
             chunkToOwners[tokenId_] = ChunkInfo(
                 to_,
-                uint16(_activeLengthTo)
+                uint32(_activeLengthTo)
             );
 
             unchecked {
                 ownerToActiveLength[to_]++;
             }
 
-            ownerToChunkIndexes[to_][_activeLengthTo] = uint16(tokenId_);
+            ownerToChunkIndexes[to_][_activeLengthTo] = uint32(tokenId_);
         }
 
         // There are no available slots, push a new one
         else {
             chunkToOwners[tokenId_] = ChunkInfo(
                 to_,
-                uint16(_totalLengthTo)
+                uint32(_totalLengthTo)
             );
 
             unchecked {
                 ownerToActiveLength[to_]++;
             }
 
-            ownerToChunkIndexes[to_].push(uint16(tokenId_));
+            ownerToChunkIndexes[to_].push(uint32(tokenId_));
         }
 
         // Finally, emit an ERC721 Transfer event
@@ -889,21 +889,21 @@ abstract contract ERC404 is Whitelistable {
         uint256 _rng = _getRNG();
         uint256 _poolLen = ownerToActiveLength[TOKEN_POOL];
         uint256 _redeemIndex = _rng % _poolLen; // a number between 0 and _poolLen - 1
-        uint16 _redeemId = ownerToChunkIndexes[TOKEN_POOL][_redeemIndex];
+        uint32 _redeemId = ownerToChunkIndexes[TOKEN_POOL][_redeemIndex];
 
         // Replace the _owner's token index with _redeemId, and vice versa
         ownerToChunkIndexes[_owner][_tokenIndex] = _redeemId;
-        ownerToChunkIndexes[TOKEN_POOL][_redeemIndex] = uint16(tokenId_);
+        ownerToChunkIndexes[TOKEN_POOL][_redeemIndex] = uint32(tokenId_);
 
         // Now, update the chunk storage to the new owners and indexes
         chunkToOwners[tokenId_] = ChunkInfo(
             TOKEN_POOL,
-            uint16(_redeemIndex)
+            uint32(_redeemIndex)
         );
 
         chunkToOwners[_redeemId] = ChunkInfo(
             _owner,
-            uint16(_tokenIndex)
+            uint32(_tokenIndex)
         );
 
         // Emit the transfers between the _owner and the pool
@@ -956,7 +956,7 @@ abstract contract ERC404 is Whitelistable {
 
     // function viewAllStorageSlots returns the entire storage array for an address.
     // Note: this returns both the active and initialized-but-unused slots. 
-    function viewAllStorageSlots(address wallet_) public virtual view returns (uint16[] memory) {
+    function viewAllStorageSlots(address wallet_) public virtual view returns (uint32[] memory) {
         return ownerToChunkIndexes[wallet_];
     }
 
@@ -966,9 +966,9 @@ abstract contract ERC404 is Whitelistable {
     }
 
     // function walletOfOwner returns the active slots of ownerToChunkIndexes
-    function walletOfOwner(address wallet_) public virtual view returns (uint16[] memory) {
+    function walletOfOwner(address wallet_) public virtual view returns (uint32[] memory) {
         uint256 l = ownerToActiveLength[wallet_];
-        uint16[] memory _chunks = new uint16[] (l);
+        uint32[] memory _chunks = new uint32[] (l);
         for (uint256 i = 0; i < l;) {
             _chunks[i] = ownerToChunkIndexes[wallet_][i];
             unchecked { ++i; }
@@ -1043,17 +1043,17 @@ abstract contract ERC404PoolSwap is ERC404 {
         // Swap their ownership data!
         chunkToOwners[fromId_] = ChunkInfo(
             TOKEN_POOL,
-            uint16(_indexTo)
+            uint32(_indexTo)
         );
 
         chunkToOwners[toId_] = ChunkInfo(
             _ownerFrom,
-            uint16(_indexFrom)
+            uint32(_indexFrom)
         );
 
         // Swap their indexes!
-        ownerToChunkIndexes[_ownerFrom][_indexFrom] = uint16(toId_);
-        ownerToChunkIndexes[TOKEN_POOL][_indexTo] = uint16(fromId_);
+        ownerToChunkIndexes[_ownerFrom][_indexFrom] = uint32(toId_);
+        ownerToChunkIndexes[TOKEN_POOL][_indexTo] = uint32(fromId_);
 
         // Delete their approveds!
         delete getApproved[fromId_];
@@ -1129,28 +1129,28 @@ abstract contract ERC404Wrapper is ERC404PoolSwap {
         if (_totalLength > _activeLength) {
             chunkToOwners[tokenId_] = ChunkInfo(
                 msg.sender,
-                uint16(_activeLength)
+                uint32(_activeLength)
             );
 
             unchecked {
                 ownerToActiveLength[msg.sender]++;
             }
 
-            ownerToChunkIndexes[msg.sender][_activeLength] = uint16(tokenId_);
+            ownerToChunkIndexes[msg.sender][_activeLength] = uint32(tokenId_);
         }
 
         // Mint by pushing a new index
         else {
             chunkToOwners[tokenId_] = ChunkInfo(
                 msg.sender,
-                uint16(_totalLength)
+                uint32(_totalLength)
             );
 
             unchecked {
                 ownerToActiveLength[msg.sender]++;
             }
 
-            ownerToChunkIndexes[msg.sender].push(uint16(tokenId_));
+            ownerToChunkIndexes[msg.sender].push(uint32(tokenId_));
         }
 
         _emitERC721Transfer(address(0), msg.sender, tokenId_);
