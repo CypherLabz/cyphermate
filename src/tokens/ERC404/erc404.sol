@@ -942,7 +942,7 @@ abstract contract ERC404 is Whitelistable {
     }
 
     // function repopulateChunks is the external handler for a user-initiated repopulation request
-    function repopulateChunk() external virtual {
+    function repopulateChunk() public virtual {
         _repopulateChunk(msg.sender);
     }
 
