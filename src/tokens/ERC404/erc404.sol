@@ -1156,6 +1156,14 @@ abstract contract ERC404Wrapper is ERC404PoolSwap {
         _emitERC721Transfer(address(0), msg.sender, tokenId_);
     }
 
+    function wrapMany(uint256[] calldata tokenIds_) public virtual {
+        uint256 l = tokenIds_.length;
+        for (uint256 i = 0; i < l;) {
+            wrap(tokenIds_[i]);
+            unchecked { ++i; }
+        }
+    }
+
     // 
     function unwrap(uint256 tokenId_) public virtual {
         // First, make sure that the msg.sender is the owner
@@ -1188,5 +1196,13 @@ abstract contract ERC404Wrapper is ERC404PoolSwap {
 
         // Transfer the NFT back to the unwrapper
         IERC721(ERC721_INTERFACE).transferFrom(address(this), msg.sender, tokenId_);
+    }
+
+    function unwrapMany(uint256[] calldata tokenIds_) public virtual {
+        uint256 l = tokenIds_.length;
+        for (uint256 i = 0; i < l;) {
+            unwrap(tokenIds_[i]);
+            unchecked { ++i; }
+        }
     }
 }
