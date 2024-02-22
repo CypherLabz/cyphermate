@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Last update: 2024-01-20
+pragma solidity ^0.8.20;
 
 import { Ownable2Step } from "./Ownable2Step.sol";
 

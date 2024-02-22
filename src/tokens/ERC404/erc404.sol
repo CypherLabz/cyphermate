@@ -28,6 +28,8 @@ import { Ownable } from "../../access/Ownable.sol";
 // Then do:
 // Figure out the wrapper version
 
+// WOOP WOOP IM HERE NOW
+
 // After that do:
 // TokenId can be customizable over starting at 0 (ARrraRarrARRarrGGGhhgHrhah)
 
@@ -150,7 +152,7 @@ abstract contract ERC404 is Whitelistable {
 
     // The Token Pool address representing the pooled tokens' owner
     address public constant TOKEN_POOL = 0x0000000000000000000000000000000004040404;
-    address public constant BURN_POOL = 0x000000000000000000000000000000000404deAD; // BURN_POOL is only used for ERC404Bridge. For a burn in NATIVE, we send to TOKEN_POOL
+    address public constant BURN_POOL = 0x000000000000000000000000000000000404deAD; // BURN_POOL is only used for ERC404Wrapper. For a burn in NATIVE, we send to TOKEN_POOL
 
     /////////////////////////////////
     // Collection Storage ///////////
@@ -169,7 +171,7 @@ abstract contract ERC404 is Whitelistable {
     }
 
     // chunkToOwners is the equivalent of _owners or _ownerOf 
-    ChunkInfo[] public chunkToOwners; // can change to internal if wanted
+    mapping(uint256 => ChunkInfo) public chunkToOwners;
 
     // Chunk stack tracking for an owner. This is used on transfer, pool/burn, and redeem/mint operations
     mapping(address => uint16[]) public ownerToChunkIndexes;
@@ -198,7 +200,7 @@ abstract contract ERC404 is Whitelistable {
         _mint(msg.sender, MAX_SUPPLY());
     }
 
-    // These are NATIVE-ERC404 type _mint and _burn. For BRIDE-ERC404 refer to ERC404Bridge functionality instead.
+    // These are NATIVE-ERC404 type _mint and _burn. For BRIDE-ERC404 refer to ERC404Wrapper functionality instead.
     // To mint an NFT, the ID is determinstic on a stack. You cannot define it here. 
     // Use mint(to_, CHUNK_SIZE()) for exactly 1.00 NFT
     function _mint(address to_, uint256 amount_) internal virtual {
@@ -1053,6 +1055,10 @@ abstract contract ERC404PoolSwap is ERC404 {
         ownerToChunkIndexes[_ownerFrom][_indexFrom] = uint16(toId_);
         ownerToChunkIndexes[TOKEN_POOL][_indexTo] = uint16(fromId_);
 
+        // Delete their approveds!
+        delete getApproved[fromId_];
+        delete getApproved[toId_];
+
         // Emit the swaps!
         _emitERC721Transfer(_ownerFrom, TOKEN_POOL, fromId_);
         _emitERC721Transfer(TOKEN_POOL, _ownerFrom, toId_);
@@ -1068,24 +1074,116 @@ abstract contract ERC404PoolSwap is ERC404 {
 }
 
 /**
- * ERC404Bridge is the BRIDGE version of ERC404. 
+ * ERC404Wrapper is the BRIDGE version of ERC404. 
  * It is meant to be used for wrapping an ERC721 token and turning it into ERC404
  * and allowing ERC404 functionality for the ERC721 token.
  * 
- * Compared to ERC404 NATIVE, ERC404Bridge has a few different things going on:
+ * Compared to ERC404 NATIVE, ERC404Wrapper has a few different things going on:
  * 1/ MINT and BURN functions are changed and are ERC721-only.
  * 2/ The bridge is to be created with constructor details that tell what the token is
 */
 
-abstract contract ERC404Bridge is ERC404PoolSwap {
+interface IERC721 {
+    function transferFrom(address from_, address to_, uint256 tokenId_) external;
+}
+
+abstract contract ERC404Wrapper is ERC404PoolSwap {
 
     // Immutable values to be determined on constructor deployment
     address public immutable ERC721_INTERFACE;
-    // uint256 public immutable 
-    
 
-    // Override MINT
-    function _mint(address to_, uint256 tokenId_) internal virtual override(ERC404) {
-        // First, disallow 
+    // Define the interface for the wrapper. A one-time operation that cannot be unchanged.
+    constructor(address interface_) {
+        ERC721_INTERFACE = interface_;
+    }
+
+    // Override _mint and _burn so that it doesn't do anything.
+    function _mint(address, uint256) internal pure override(ERC404) { revert("disabled"); }
+    function _burn(address, uint256) internal pure override(ERC404) { revert("disabled"); }
+
+    // wrap is the ERC404Wrapper version of a mint. Please don't use _mint when using ERC404Wrapper
+    function wrap(uint256 tokenId_) public virtual {
+        // Transfer the NFT to this smart contract
+        IERC721(ERC721_INTERFACE).transferFrom(msg.sender, address(this), tokenId_);
+
+        // This should never happen
+        address _ownerBefore = chunkToOwners[tokenId_].owner;
+        require(_ownerBefore == address(0), "ERC404Wrapper: wrap owner exception");
+
+        // Increment total supply
+        totalSupply += CHUNK_SIZE();
+
+        // Mint a CHUNK_SIZE of ERC20 to the wrapper
+        unchecked {
+            balanceOf[msg.sender] += CHUNK_SIZE(); // if the above addition succeded, this must succeed without overflowing
+        }
+
+        // Emit an ERC20 transfer
+        _emitERC20Transfer(address(0), msg.sender, CHUNK_SIZE());
+
+        // Now, mint the NFT equivalent
+        uint256 _activeLength = ownerToActiveLength[msg.sender];
+        uint256 _totalLength = ownerToChunkIndexes[msg.sender].length;
+
+        // Mint by reusing initialized index
+        if (_totalLength > _activeLength) {
+            chunkToOwners[tokenId_] = ChunkInfo(
+                msg.sender,
+                uint16(_activeLength)
+            );
+
+            unchecked {
+                ownerToActiveLength[msg.sender]++;
+            }
+
+            ownerToChunkIndexes[msg.sender][_activeLength] = uint16(tokenId_);
+        }
+
+        // Mint by pushing a new index
+        else {
+            chunkToOwners[tokenId_] = ChunkInfo(
+                msg.sender,
+                uint16(_totalLength)
+            );
+
+            unchecked {
+                ownerToActiveLength[msg.sender]++;
+            }
+
+            ownerToChunkIndexes[msg.sender].push(uint16(tokenId_));
+        }
+
+        _emitERC721Transfer(address(0), msg.sender, tokenId_);
+    }
+
+    // 
+    function unwrap(uint256 tokenId_) public virtual {
+        // First, make sure that the msg.sender is the owner
+        address _owner = chunkToOwners[tokenId_].owner;
+        require(_owner == msg.sender, "ERC404: unwrap incorrect owner");
+        require(_owner != address(0), "ERC404: unwrap nonexistent token");
+
+        // BURN a CHUNK_SIZE of ERC20 from the wrapper
+        balanceOf[msg.sender] -= CHUNK_SIZE();
+
+        unchecked { 
+            totalSupply -= CHUNK_SIZE(); 
+        }
+
+        _emitERC20Transfer(msg.sender, address(0), CHUNK_SIZE());
+
+        // Now, reorder the token to the top of the chunk stack
+        uint256 _ownerActiveIndex = ownerToActiveLength[_owner] - 1;
+        _reorder(_owner, tokenId_, _ownerActiveIndex);
+
+        // Then, burn the chunk
+        delete getApproved[tokenId_];
+        delete chunkToOwners[tokenId_];
+
+        unchecked { 
+            ownerToActiveLength[msg.sender]--; // We assume this is > 0 because the owner has a chunk
+        }
+
+        _emitERC721Transfer(msg.sender, address(0), tokenId_);
     }
 }
