@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Last update: 2024-02-23
+// Last update: 2024-02-20
 pragma solidity ^0.8.20;
 
 import { Ownable } from "../../access/Ownable.sol";
@@ -135,18 +135,9 @@ abstract contract ERC404 is Whitelistable {
     /////////////////////////////////
 
     uint8 public constant decimals = 18;
-    function TOTAL_CHUNKS() public virtual pure returns (uint256) { 
-        // Override to change total chunks
-        return 10000; 
-    }
-    function CHUNK_SIZE() public virtual pure returns (uint256) { 
-        // Override to change chunk size
-        return 1 ether; 
-    }
-    function MAX_SUPPLY() public virtual pure returns (uint256) {
-        // By nature, MAX_SUPPLY is total chunks * chunk size
-        return TOTAL_CHUNKS() * CHUNK_SIZE();
-    }
+    uint256 public constant TOTAL_CHUNKS = 10000;
+    uint256 public constant CHUNK_SIZE = 100 ether;
+    uint256 public constant MAX_SUPPLY = TOTAL_CHUNKS * CHUNK_SIZE; // By nature, MAX_SUPPLY is total chunks * chunk size
 
     // The Token Pool address representing the pooled tokens' owner
     address public constant TOKEN_POOL = 0x0000000000000000000000000000000004040404;
@@ -169,7 +160,7 @@ abstract contract ERC404 is Whitelistable {
     }
 
     // chunkToOwners is the equivalent of _owners or _ownerOf 
-    ChunkInfo[] public chunkToOwners; // can change to internal if wanted
+    ChunkInfo[TOTAL_CHUNKS] public chunkToOwners; // can change to internal if wanted
 
     // Chunk stack tracking for an owner. This is used on transfer, pool/burn, and redeem/mint operations
     mapping(address => uint16[]) public ownerToChunkIndexes;
@@ -195,21 +186,21 @@ abstract contract ERC404 is Whitelistable {
 
         // A boilerplate "mint max supply to deployer without minting the ERC721 tokens"
         toggleChunkProcessing(false);
-        _mint(msg.sender, MAX_SUPPLY());
+        _mint(msg.sender, MAX_SUPPLY);
     }
 
     // These are NATIVE-ERC404 type _mint and _burn. For BRIDE-ERC404 refer to ERC404Bridge functionality instead.
     // To mint an NFT, the ID is determinstic on a stack. You cannot define it here. 
-    // Use mint(to_, CHUNK_SIZE()) for exactly 1.00 NFT
+    // Use mint(to_, CHUNK_SIZE) for exactly 1.00 NFT
     function _mint(address to_, uint256 amount_) internal virtual {
         // Disallow using tokenIds, we enforce it here for clearer implementation guidelines
-        require(amount_ > TOTAL_CHUNKS(), "ERC404: _mint amount falls within tokenIds");
+        require(amount_ > MAX_SUPPLY, "ERC404: _mint amount falls within tokenIds");
         
         // Store balance before balance manipulations
         uint256 _startBalTo = balanceOf[to_];
 
         // Firstly, increase the totalSupply and ERC20 of receiver
-        require(MAX_SUPPLY() >= (totalSupply + amount_), "ERC404: _mint exceeds max supply");
+        require(MAX_SUPPLY >= (totalSupply + amount_), "ERC404: _mint exceeds max supply");
         
         unchecked { 
             totalSupply += amount_; // overflow check already in require statement
@@ -222,8 +213,8 @@ abstract contract ERC404 is Whitelistable {
         if (_isChunkProcessor(to_)) {
             // Calculate chunk differences
             uint256 _chunkDiff = 
-                (balanceOf[to_] / CHUNK_SIZE()) - 
-                (_startBalTo / CHUNK_SIZE());
+                (balanceOf[to_] / CHUNK_SIZE) - 
+                (_startBalTo / CHUNK_SIZE);
             
             // If there are any chunk differences, then process the chunks using _mintOrRedeem
             for (uint256 i = 0; i < _chunkDiff;) {
@@ -236,20 +227,20 @@ abstract contract ERC404 is Whitelistable {
     // _burn function using either an amount or NFT input
     function _burn(address from_, uint256 amtOrTokenId_) internal virtual {
         // Determine if it's a tokenId or an amount
-        if (TOTAL_CHUNKS() >= amtOrTokenId_) {
+        if (TOTAL_CHUNKS >= amtOrTokenId_) {
             // It's a tokenId
             address _owner = chunkToOwners[amtOrTokenId_].owner;
             require(_owner != address(0), "ERC404: _burn nonexistent token");
             require(_owner == from_, "ERC404: _burn incorrect owner");
 
             // Now, process both a chunk amount of tokens, and then pool the token in BURN_POOL
-            balanceOf[from_] -= CHUNK_SIZE();
+            balanceOf[from_] -= CHUNK_SIZE;
 
             unchecked {
-                totalSupply -= CHUNK_SIZE();
+                totalSupply -= CHUNK_SIZE;
             }
 
-            _emitERC20Transfer(from_, address(0), CHUNK_SIZE());
+            _emitERC20Transfer(from_, address(0), CHUNK_SIZE);
 
             // Pool the token to BURN_POOL. This requires chunk-stack manipulation
             // Find the active index of from
@@ -277,8 +268,8 @@ abstract contract ERC404 is Whitelistable {
 
             // After, we calculate the chunk difference and loop _poolChunk
             uint256 _chunkDiff = 
-                (_startBalFrom / CHUNK_SIZE()) - 
-                (balanceOf[from_] / CHUNK_SIZE());
+                (_startBalFrom / CHUNK_SIZE) - 
+                (balanceOf[from_] / CHUNK_SIZE);
             
             for (uint256 i = 0; i < _chunkDiff;) {
                 _poolChunk(from_, TOKEN_POOL);
@@ -290,7 +281,7 @@ abstract contract ERC404 is Whitelistable {
     // _reorder function reorders the tokenId in the FILO chunk stack
     function _reorder(address from_, uint256 tokenId_, uint256 posTo_) internal virtual {
         // We only allow reorders of tokenIds
-        require(TOTAL_CHUNKS() >= tokenId_, "ERC404: _reorder not tokenId");
+        require(TOTAL_CHUNKS >= tokenId_, "ERC404: _reorder not tokenId");
 
         uint256 _currTokenIndex = chunkToOwners[tokenId_].index;
         
@@ -322,7 +313,7 @@ abstract contract ERC404 is Whitelistable {
 
     function burn(uint256 amtOrTokenId_) public virtual {
         // If it's an NFT, it must be owned by the sender.
-        if (TOTAL_CHUNKS() >= amtOrTokenId_) {
+        if (TOTAL_CHUNKS >= amtOrTokenId_) {
             address _owner = chunkToOwners[amtOrTokenId_].owner;
             require(_owner == msg.sender, "ERC404: burn not from owner");
         }
@@ -369,7 +360,7 @@ abstract contract ERC404 is Whitelistable {
         uint256 _initializedChunkIndex = initializedChunkIndex; // Load the intiialized chunk index
 
         // Determine if we're fully initialized and act according to the result
-        if (TOTAL_CHUNKS() > _initializedChunkIndex) {
+        if (TOTAL_CHUNKS > _initializedChunkIndex) {
             // We're not fully initialized, so we will mint a new token.
 
             // Additionally, we will be using active chunk index optimization. 
@@ -613,12 +604,12 @@ abstract contract ERC404 is Whitelistable {
         if (ownerToActiveLength[from_] > 0 && _isChunkProcessor(to_)) {
             // We will use _swapSlot flow and then return before the subsequent flow
             uint256 _chunkDiffFrom = 
-                (_startBalFrom / CHUNK_SIZE()) - 
-                (balanceOf[from_] / CHUNK_SIZE());
+                (_startBalFrom / CHUNK_SIZE) - 
+                (balanceOf[from_] / CHUNK_SIZE);
             
             uint256 _chunkDiffTo = 
-                (balanceOf[to_] / CHUNK_SIZE()) - 
-                (_startBalTo / CHUNK_SIZE());
+                (balanceOf[to_] / CHUNK_SIZE) - 
+                (_startBalTo / CHUNK_SIZE);
 
             // @0xinu: im passing out. handle wl->nwl nwl->wl cases
             _chunkDiffFrom = _min(_chunkDiffFrom, ownerToActiveLength[from_]);
@@ -662,8 +653,8 @@ abstract contract ERC404 is Whitelistable {
         // if (!whitelisted[from_] && ownerToActiveLength[from_] > 0) {
         if (ownerToActiveLength[from_] > 0) {
             uint256 _chunkDiffFrom = 
-                (_startBalFrom / CHUNK_SIZE()) - 
-                (balanceOf[from_] / CHUNK_SIZE());
+                (_startBalFrom / CHUNK_SIZE) - 
+                (balanceOf[from_] / CHUNK_SIZE);
             
             if (_chunkDiffFrom > 0) {
                 for (uint256 i = 0; i < _chunkDiffFrom;) {
@@ -676,8 +667,8 @@ abstract contract ERC404 is Whitelistable {
         // If to_ is not whitelisted, we will redeem chunks for him.
         if (_isChunkProcessor(to_)) {
             uint256 _chunkDiffTo = 
-                (balanceOf[to_] / CHUNK_SIZE()) - 
-                (_startBalTo / CHUNK_SIZE()); 
+                (balanceOf[to_] / CHUNK_SIZE) - 
+                (_startBalTo / CHUNK_SIZE); 
             
             if (_chunkDiffTo > 0) {
                 for (uint256 i = 0; i < _chunkDiffTo;) {
@@ -700,14 +691,14 @@ abstract contract ERC404 is Whitelistable {
         address _owner = chunkToOwners[tokenId_].owner;
         require(_owner == from_, "ERC404: _chunkTransfer from incorrect owner");
 
-        // We're transferring a chunk, so, an ERC20 transfer of CHUNK_SIZE() is made
-        balanceOf[from_] -= CHUNK_SIZE();
+        // We're transferring a chunk, so, an ERC20 transfer of CHUNK_SIZE is made
+        balanceOf[from_] -= CHUNK_SIZE;
 
         unchecked { 
-            balanceOf[to_] += CHUNK_SIZE();
+            balanceOf[to_] += CHUNK_SIZE;
         }
 
-        _emitERC20Transfer(from_, to_, CHUNK_SIZE());
+        _emitERC20Transfer(from_, to_, CHUNK_SIZE);
 
         // @0xinu: 20240221: I'm removing this because we can handle uneven activeLength cases etc. now. But we need to test it.
         // // Now, since whitelisted addresses can't handle ERC721-chunks
@@ -778,10 +769,10 @@ abstract contract ERC404 is Whitelistable {
     }
 
     // function transferFrom handles both ERC20-esque and ERC721-esque transfers.
-    // The identifier of ERC20 or ERC721 is by checking amount with TOTAL_CHUNKS()
+    // The identifier of ERC20 or ERC721 is by checking amount with TOTAL_CHUNKS
     function transferFrom(address from_, address to_, uint256 amtOrTokenId_) public virtual returns (bool) {
         // Determine if it's an amount or a tokenId
-        if (TOTAL_CHUNKS() >= amtOrTokenId_) {
+        if (TOTAL_CHUNKS >= amtOrTokenId_) {
             // It's a tokenId. Check approval or ownership. (Handle as ERC721)
             require(
                 msg.sender == from_ || // the sender must be the owner ||
@@ -810,7 +801,7 @@ abstract contract ERC404 is Whitelistable {
 
     // safeTransferFroms for ERC721 operations. We return true as well, for the culture.
     function _safeTransferFrom(address from_, address to_, uint256 tokenId_, bytes memory data_) internal virtual returns (bool) {
-        require(TOTAL_CHUNKS() >= tokenId_, "ERC404: _safeTransferFrom invalid tokenId");
+        require(TOTAL_CHUNKS >= tokenId_, "ERC404: _safeTransferFrom invalid tokenId");
 
         transferFrom(from_, to_, tokenId_);
 
@@ -832,10 +823,10 @@ abstract contract ERC404 is Whitelistable {
         return _safeTransferFrom(from_, to_, tokenId_, "");
     }
 
-    // function approve handles both ERC20 and ERC721 approvals, identifed by TOTAL_CHUNKS()
+    // function approve handles both ERC20 and ERC721 approvals, identifed by TOTAL_CHUNKS
     function approve(address operator_, uint256 amtOrTokenId_) public virtual returns (bool) {
         // Handle ERC721 approval
-        if(TOTAL_CHUNKS() >= amtOrTokenId_) {
+        if(TOTAL_CHUNKS >= amtOrTokenId_) {
             // Check approval or ownership
             address _owner = chunkToOwners[amtOrTokenId_].owner;
             require(
@@ -925,7 +916,7 @@ abstract contract ERC404 is Whitelistable {
         uint256 _balanceOfTarget = balanceOf[target_];
 
         // find the chunkDiff of the target from their balance
-        uint256 _chunksEligible = _balanceOfTarget / CHUNK_SIZE();
+        uint256 _chunksEligible = _balanceOfTarget / CHUNK_SIZE;
         uint256 _activeChunks = ownerToActiveLength[target_];
         uint256 _chunkDiff = _chunksEligible - _activeChunks;
 
@@ -1019,8 +1010,8 @@ abstract contract ERC404PoolSwap is ERC404 {
         // Note: the deduction of fee must not result in a different chunkDiff
         // We can safely assume that if _ownerFrom is owned by owner, then 
         // the owner must have at least 1 chunk's worth of tokens.
-        uint256 _availableRemainderFrom = balanceOf[_ownerFrom] % CHUNK_SIZE();
-        uint256 _swapFee = (CHUNK_SIZE() / 100_000) * poolSwapRoyaltiesFee;
+        uint256 _availableRemainderFrom = balanceOf[_ownerFrom] % CHUNK_SIZE;
+        uint256 _swapFee = (CHUNK_SIZE / 100_000) * poolSwapRoyaltiesFee;
         require(_availableRemainderFrom > _swapFee, "ERC404: _swap not enough remainder");
 
         // Transfer _swapFee to the royalties receiver
@@ -1064,28 +1055,5 @@ abstract contract ERC404PoolSwap is ERC404 {
         require(_ownerFrom == msg.sender, "ERC404: swap not from owner");
         _swap(fromId_, toId_);
         return true;
-    }
-}
-
-/**
- * ERC404Bridge is the BRIDGE version of ERC404. 
- * It is meant to be used for wrapping an ERC721 token and turning it into ERC404
- * and allowing ERC404 functionality for the ERC721 token.
- * 
- * Compared to ERC404 NATIVE, ERC404Bridge has a few different things going on:
- * 1/ MINT and BURN functions are changed and are ERC721-only.
- * 2/ The bridge is to be created with constructor details that tell what the token is
-*/
-
-abstract contract ERC404Bridge is ERC404PoolSwap {
-
-    // Immutable values to be determined on constructor deployment
-    address public immutable ERC721_INTERFACE;
-    // uint256 public immutable 
-    
-
-    // Override MINT
-    function _mint(address to_, uint256 tokenId_) internal virtual override(ERC404) {
-        // First, disallow 
     }
 }
