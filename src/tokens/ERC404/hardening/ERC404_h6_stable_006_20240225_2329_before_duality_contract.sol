@@ -2,7 +2,7 @@
 // Last update: 2024-02-23
 pragma solidity ^0.8.20;
 
-import { Ownable } from "../../../access/Ownable.sol";
+import { Ownable } from "../../access/Ownable.sol";
 
 // Reroll -> Random
 // Royalties on a Trade to royalty receiver.
@@ -942,7 +942,7 @@ abstract contract ERC404 is Whitelistable {
     }
 
     // function repopulateChunks is the external handler for a user-initiated repopulation request
-    function repopulateChunk() external virtual {
+    function repopulateChunk() public virtual {
         _repopulateChunk(msg.sender);
     }
 
