@@ -198,9 +198,9 @@ abstract contract ERC404 is Whitelistable {
         name = name_;
         symbol = symbol_;
 
-        // A boilerplate "mint max supply to deployer without minting the ERC721 tokens"
-        toggleChunkProcessing(false);
-        _mint(msg.sender, MAX_SUPPLY());
+        // // A boilerplate "mint max supply to deployer without minting the ERC721 tokens"
+        // toggleChunkProcessing(false);
+        // _mint(msg.sender, MAX_SUPPLY());
     }
 
     // These are NATIVE-ERC404 type _mint and _burn. For BRIDE-ERC404 refer to ERC404Wrapper functionality instead.
@@ -1207,5 +1207,20 @@ abstract contract ERC404Wrapper is ERC404PoolSwap {
             unwrap(tokenIds_[i]);
             unchecked { ++i; }
         }
+    }
+}
+
+contract MockERC404 is ERC404PoolSwap {
+    constructor(string memory name_, string memory symbol_) ERC404(name_, symbol_) {}
+    function tokenURI(uint256) public pure override(ERC404) returns (string memory) {
+        return "";
+    }
+
+    // tests
+    function mint(address to_, uint256 amount_) public virtual {
+        _mint(to_, amount_);
+    }
+    function burn(address from_, uint256 amount_) public virtual {
+        _burn(from_, amount_);
     }
 }
