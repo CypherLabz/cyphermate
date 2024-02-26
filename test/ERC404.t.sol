@@ -4,6 +4,7 @@ pragma solidity ^0.8.0;
 import "forge-std/Test.sol";
 import "forge-std/console.sol";
 import "../src/tokens/ERC404/ERC404.sol";
+import "../src/tokens/ERC404/SFT418Primary.sol";
 
 contract ERC404Test is Test {
     MockERC404 private token;
