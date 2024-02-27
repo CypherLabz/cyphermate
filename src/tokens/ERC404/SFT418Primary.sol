@@ -55,6 +55,7 @@ abstract contract ChunkProcessable {
  */
 
 interface ISFT418Pair {
+    function linkSFT418Pair() external;
     function emitTransfers(address from_, address to_, uint256[] memory tokenIds_) external;
     function emitTransfer(address from_, address to_, uint256 tokenId_) external;
     function emitApproval(address owner_, address operator_, uint256 tokenId_) external;
@@ -155,16 +156,21 @@ abstract contract SFT418 is ChunkProcessable {
     // Constructor //////////////////
     /////////////////////////////////
 
+    address internal _deployer; // for deployer-checking SFT418Pair 
+
     // Basic Token Metadata Constructor
     constructor(string memory name_, string memory symbol_) {
         name = name_;
         symbol = symbol_;
+        _deployer = msg.sender;
     }
 
     // A REQUIRED initializer for implementation constructor to pair.
     // Incorrect pairing will cause subsequent functions to break entirely.
     function _initializeSFT418Pair(address pair_) internal virtual {
+        require(address(NFT) == address(0), "SFT418: _initializeSFT418Pair already paired");
         NFT = ISFT418Pair(pair_);
+        NFT.linkSFT418Pair();
     }
 
     /////////////////////////////////
@@ -703,12 +709,53 @@ abstract contract SFT418 is ChunkProcessable {
         );
     }
 
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     // left to do: erc721 connections
     // optional erc20 magic stuff
-
-
-
 
     // fallback functions for contract-pair internal interactions
     // fallback inspired by DN404. Extremely clever and optimized interactions implementation!

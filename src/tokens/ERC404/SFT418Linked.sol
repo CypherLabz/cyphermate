@@ -14,9 +14,18 @@ pragma solidity ^0.8.20;
  * https://0xinuarashi.com/articles/intro-to-phantom-minting
  */
 
-interface ISF418Primary {
+interface ISFT418Pair {
+    function emitTransfers(address from_, address to_, uint256[] memory tokenIds_) external;
+    function emitTransfer(address from_, address to_, uint256 tokenId_) external;
+    function emitApproval(address owner_, address operator_, uint256 tokenId_) external;
+    function emitSetApprovalForAll(address owner_, address operator_, bool approved_) external;
+}
+
+interface ISFT418Primary {
     function name() external view returns (string memory);
     function symbol() external view returns (string memory);
+    
+    function _deployer() external view returns (address);
 
     function _NFT_ownerOf(uint256 tokenId_) external view returns (address);
     function _NFT_balanceOf(address wallet_) external view returns (uint256);
@@ -40,6 +49,7 @@ abstract contract SFT418Pair {
     event Transfer(address indexed from, address indexed to, uint256 indexed id);
     event Approval(address indexed owner, address indexed spender, uint256 indexed id);
     event ApprovalForAll(address indexed owner, address indexed operator, bool approved);
+    event ContractLinked(address contract_);
 
     // keccak256(bytes("Transfer(address,address,uint256)"))
     bytes32 internal constant _TRANSFER_EVENT_SIGNATURE = 
@@ -58,7 +68,7 @@ abstract contract SFT418Pair {
     /////////////////////////////////
 
     // The interface for SFT418Primary 
-    ISF418Primary public SFT418; 
+    ISFT418Primary public SFT418; 
 
     // Deployer for initialization of pairing
     address internal _deployer;
@@ -150,7 +160,7 @@ abstract contract SFT418Pair {
     /////////////////////////////////
     // Fallback SFT418 Interface ////
     /////////////////////////////////
-    // YUL snippets inspired by DN404 / Solady 
+    // Fallback method of communication inspired by DN404 / Solady
 
     function _calldataload(uint256 offset_) private pure returns (uint256 _value) {
         assembly {
@@ -160,15 +170,34 @@ abstract contract SFT418Pair {
 
     modifier sft418fallback() virtual {
         // Grab the first bytes32 of calldata and right shift bytes28 resulting in bytes4 selector
-        bytes4 _fnSelector = bytes4(bytes32(_calldataload(0x00) >> 224)); 
+        bytes4 l_fnSelector = bytes4(bytes32(_calldataload(0x00) >> 224)); 
 
         // Load the address of the SFT418 pair
-        address _pairAddress = address(SFT418);
+        address l_pairAddress = address(SFT418);
 
-        // ASM VERSION
+        // FALLBACK LINK FUNCTION
+        // "linkSFT418Pair()" >> "0x4f2d134e"
+        if (l_fnSelector == 0x4f2d134e) {
+            // read the _deployer of the sender
+            address _senderDeployer = ISFT418Primary(msg.sender)._deployer();
+
+            // make sure our caller is deployed by the same deployer
+            require(_senderDeployer == _deployer, "SFT418Pair: fallback() linkSFT418Pair invalid deployer");
+
+            // make sure we've never linked before (one-time thing only)
+            require(l_pairAddress == address(0), "SFT418Pair: fallback() linkSFT418Pair already paired");
+
+            // link the contract
+            SFT418 = ISFT418Primary(msg.sender);
+
+            // emit event
+            emit ContractLinked(msg.sender);
+        }
+
+        // FALLBACK PAIR FUNCTIONS
         // "emitTransfers(address,address,uint256[])" >> "0xc9063eae"
-        if (_fnSelector == 0xc9063eae) {
-            require(msg.sender == _pairAddress, "SFT418Pair: fallback() emitTransfers not from pair");
+        if (l_fnSelector == 0xc9063eae) {
+            require(msg.sender == l_pairAddress, "SFT418Pair: fallback() emitTransfers not from pair");
             assembly {
                 let from_ := calldataload(0x04) // load from_ address from first 32 bytes of calldata arguments
                 let to_ := calldataload(0x24)  // load to_ address from second 32 bytes of calldata args
@@ -186,8 +215,8 @@ abstract contract SFT418Pair {
         }
 
         // "emitTransfer(address,address,uint256)" >> "0x23de6651"
-        if (_fnSelector == 0x23de6651) {
-            require(msg.sender == _pairAddress, "SFT418Pair: fallback() emitTransfer not from pair");
+        if (l_fnSelector == 0x23de6651) {
+            require(msg.sender == l_pairAddress, "SFT418Pair: fallback() emitTransfer not from pair");
             assembly {
                 let from_ := calldataload(0x04)
                 let to_ := calldataload(0x24)
@@ -199,8 +228,8 @@ abstract contract SFT418Pair {
         }
 
         // "emitApproval(address,address,uint256)" >> "0x5687f2b8"
-        if (_fnSelector == 0x5687f2b8) {
-            require(msg.sender == _pairAddress, "SFT418Pair: fallback() emitApproval not from pair");
+        if (l_fnSelector == 0x5687f2b8) {
+            require(msg.sender == l_pairAddress, "SFT418Pair: fallback() emitApproval not from pair");
             assembly {
                 let owner_ := calldataload(0x04)
                 let spender_ := calldataload(0x24)
@@ -212,8 +241,8 @@ abstract contract SFT418Pair {
         }
 
         // "emitSetApprovalForAll(address,address,bool)" >> "0xfb5a1525"
-        if (_fnSelector == 0xfb5a1525) {
-            require(msg.sender == _pairAddress, "SFT418Pair: fallback() emitSetApprovalForAll not from pair");
+        if (l_fnSelector == 0xfb5a1525) {
+            require(msg.sender == l_pairAddress, "SFT418Pair: fallback() emitSetApprovalForAll not from pair");
             assembly {
                 let owner_ := calldataload(0x04)
                 let operator_ := calldataload(0x24)
@@ -229,48 +258,8 @@ abstract contract SFT418Pair {
             }
         }
 
-        // // ABSTRACTED VERSION
-        // // "emitTransfers(address,address,uint256[])" >> "0xc9063eae"
-        // if (_fnSelector == ISFT418Pair.emitTransfers.selector) {
-        //     // receive msg.sender and make sure it's _pairAddress only
-        //     require(msg.sender == _pairAddress, "SFT418Pair: fallback() emitTransfers not from pair");
-
-        //     // grab calldata length
-        //     uint256 _calldataLength = msg.data.length;
-        //     uint256 _argumentsLength = _calldataLength - 4;
-
-        //     // the minimum amount of length for an (address,address,uint256[]) is 32+3 (96)
-        //     require(_argumentsLength >= 96, "SFT418Pair: calldata length invalid");
-
-        // }
-
-        // // "emitTransfer(address,address,uint256)" >> "0x23de6651"
-        // if (_fnSelector == ISFT418Pair.emitTransfer.selector) {
-        //     require(msg.sender == _pairAddress, "SFT418Pair: fallback() emitTransfers not from pair");
-
-        // }
-
-        // // "emitApproval(address,address,uint256)" >> "0x5687f2b8"
-        // if (_fnSelector == ISFT418Pair.emitApproval.selector) {
-        //     require(msg.sender == _pairAddress, "SFT418Pair: fallback() emitTransfers not from pair");
-
-        // }
-
-        // // "emitSetApprovalForAll(address,address,bool)" >> "0xfb5a1525"
-        // if (_fnSelector == ISFT418Pair.emitSetApprovalForAll.selector) {
-        //     require(msg.sender == _pairAddress, "SFT418Pair: fallback() emitTransfers not from pair");
-
-        // }
-
         _;
     }
-}
-
-interface ISFT418Pair {
-    function emitTransfers(address from_, address to_, uint256[] memory tokenIds_) external;
-    function emitTransfer(address from_, address to_, uint256 tokenId_) external;
-    function emitApproval(address owner_, address operator_, uint256 tokenId_) external;
-    function emitSetApprovalForAll(address owner_, address operator_, bool approved_) external;
 }
 
 abstract contract ERC721TokenReceiver {
