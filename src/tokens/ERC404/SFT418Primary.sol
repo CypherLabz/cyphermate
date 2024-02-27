@@ -208,6 +208,17 @@ abstract contract SFT418 is ChunkProcessable {
         ownerToActiveLength[from_]--;
     }
 
+    function _reorderChunk(address from_, uint256 tokenId_, uint256 posTo) internal virtual {
+        // Make sure from_ is the _owner
+        address _owner = chunkToOwners[tokenId_].owner;
+        require(from_ == _owner, "SFT418: _reorderChunk from_ is not owner");
+
+        // Find the current index 
+        uint256 _currTokenIndex = chunkToOwners[tokenId_].index;
+
+        
+    }
+
     // Internal NFT Minting and storage manipulations. Returns value to interface with  SFT418Pair
     // Note: there is optimization to do here with NFT.emitTransfer calls into a batched NFT.emitTransfers call, but for simplicity, I will do it like this for now.
     function _NFTMintOrRedeem(address to_, uint256 amount_) internal virtual {
