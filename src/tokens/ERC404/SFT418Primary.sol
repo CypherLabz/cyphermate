@@ -57,6 +57,8 @@ abstract contract ChunkProcessable {
 interface ISFT418Pair {
     function emitTransfers(address from_, address to_, uint256[] memory tokenIds_) external;
     function emitTransfer(address from_, address to_, uint256 tokenId_) external;
+    function emitApproval(address owner_, address operator_, uint256 tokenId_) external;
+    function emitSetApprovalForAll(address owner_, address operator_, bool approved_) external;
 }
 
 abstract contract SFT418 is ChunkProcessable {
@@ -109,12 +111,17 @@ abstract contract SFT418 is ChunkProcessable {
     uint256 public totalSupply;
 
     // ERC20 Balances and Allowances
-    mapping(address => uint256) public balanceOf;
+    mapping(address => uint256) public _balanceOf;
     mapping(address => mapping(address => uint256)) public allowance;
 
-    // ERC721 getApproved and isApprovedForAll
-    mapping(uint256 => address) public getApproved;
-    mapping(address => mapping(address => bool)) public isApprovedForAll;
+    // Overrideable balanceOf for fun functionality in the future
+    function balanceOf(address wallet_) public virtual view returns (uint256) {
+        return _balanceOf[wallet_];
+    }
+
+    // ERC721 _getApproved and _isApprovedForAll
+    mapping(uint256 => address) internal _getApproved;
+    mapping(address => mapping(address => bool)) internal _isApprovedForAll;
 
     // [SFT418Pair] a REQUIRED pairing between SFT418 (ERC20) and SFT418Pair (ERC721)
     ISFT418Pair public NFT;
@@ -175,6 +182,11 @@ abstract contract SFT418 is ChunkProcessable {
         return a > b ? b : a;
     }
 
+    // _getRNG returns a pseudo-random number. override to implement your own rng logic
+    function _getRNG() internal virtual view returns (uint256) {
+        return uint256(keccak256(abi.encodePacked(block.timestamp, block.prevrandao, blockhash(block.number - 1))));
+    }
+
     /////////////////////////////////
     // Internal Logic Functions /////
     /////////////////////////////////
@@ -208,15 +220,30 @@ abstract contract SFT418 is ChunkProcessable {
         ownerToActiveLength[from_]--;
     }
 
-    function _reorderChunk(address from_, uint256 tokenId_, uint256 posTo) internal virtual {
+    function _reorderChunk(address from_, uint256 tokenId_, uint256 posTo_) internal virtual {
+        // Find the current index. If it's the same index, just return
+        uint256 _currTokenIndex = chunkToOwners[tokenId_].index;
+        if(_currTokenIndex == posTo_) return;
+
         // Make sure from_ is the _owner
         address _owner = chunkToOwners[tokenId_].owner;
         require(from_ == _owner, "SFT418: _reorderChunk from_ is not owner");
 
-        // Find the current index 
-        uint256 _currTokenIndex = chunkToOwners[tokenId_].index;
+        // Make sure the reordering is within bounds of activeIndex
+        // We assume that length must be at LEAST 1 if owner check was successful
+        uint256 _activeIndex = ownerToActiveLength[from_] - 1; 
+        require(_activeIndex >= posTo_, "SFT418: _reorderChunk out of bounds");
 
-        
+        // Swap the positions of tokenId_ and posTo_ internally
+        uint32 _tokenIdAtPosBefore = ownerToChunkIndexes[from_][posTo_];
+        ownerToChunkIndexes[from_][_currTokenIndex] = _tokenIdAtPosBefore;
+        ownerToChunkIndexes[from_][posTo_] = uint32(tokenId_);
+
+        // And also do the same for stored index in chunkToOwners
+        chunkToOwners[_tokenIdAtPosBefore].index = uint32(_currTokenIndex);
+        chunkToOwners[tokenId_].index = uint32(posTo_);
+
+        emit ChunkReordered(from_, tokenId_, _currTokenIndex, posTo_);
     }
 
     // Internal NFT Minting and storage manipulations. Returns value to interface with  SFT418Pair
@@ -250,8 +277,8 @@ abstract contract SFT418 is ChunkProcessable {
                 _pushChunk(to_, _redeemId);
                 _popChunk(TOKEN_POOL);
 
-                // A non-required sanity check of deleting getApproved (standard on transfer)
-                delete getApproved[uint256(_redeemId)];
+                // A non-required sanity check of deleting _getApproved (standard on transfer)
+                delete _getApproved[uint256(_redeemId)];
 
                 NFT.emitTransfer(TOKEN_POOL, to_, _redeemId);
             }
@@ -275,7 +302,7 @@ abstract contract SFT418 is ChunkProcessable {
 
                 // Pop and delete approvals
                 _popChunk(from_);
-                delete getApproved[_tokenId];
+                delete _getApproved[_tokenId];
 
                 // Push chunk to pool
                 _pushChunk(TOKEN_POOL, _tokenId);
@@ -311,7 +338,7 @@ abstract contract SFT418 is ChunkProcessable {
 
             // Pop chunk from sender
             _popChunk(from_);
-            delete getApproved[_tokenToSwap];
+            delete _getApproved[_tokenToSwap];
 
             _tokenIds[i] = _tokenToSwap;
             unchecked { ++i; }
@@ -341,7 +368,7 @@ abstract contract SFT418 is ChunkProcessable {
 
         // Pop the chunk and delete approvals
         _popChunk(from_);
-        delete getApproved[tokenId_];
+        delete _getApproved[tokenId_];
 
         // Push chunk
         _pushChunk(to_, tokenId_);
@@ -352,10 +379,10 @@ abstract contract SFT418 is ChunkProcessable {
 
     // function _ERC20Transfer is the internal handler for a ERC20-pure transfer
     function _ERC20Transfer(address from_, address to_, uint256 amount_) internal virtual {
-        balanceOf[from_] -= amount_;
+        _balanceOf[from_] -= amount_;
 
         unchecked { 
-            balanceOf[to_] += amount_;
+            _balanceOf[to_] += amount_;
         }
 
         emit Transfer(from_, to_, amount_);
@@ -371,8 +398,8 @@ abstract contract SFT418 is ChunkProcessable {
         require(to_ != address(0), "SFT418: _transfer to zero address");
 
         // Store the before balances of from_ and to_ for chunkDiff comparisons
-        uint256 _startBalFrom = balanceOf[from_];
-        uint256 _startBalTo = balanceOf[to_];
+        uint256 _startBalFrom = balanceOf(from_);
+        uint256 _startBalTo = balanceOf(to_);
 
         // ERC20 balance transfer
         _ERC20Transfer(from_, to_, amount_);
@@ -381,8 +408,8 @@ abstract contract SFT418 is ChunkProcessable {
             _isChunkProcessor(to_)) // To must receive chunks
         {
             // If so, we can simply swap the slots
-            uint256 _chunkDiffFrom = _calChunkDiff(_startBalFrom, balanceOf[from_]);
-            uint256 _chunkDiffTo = _calChunkDiff(balanceOf[to_], _startBalTo);
+            uint256 _chunkDiffFrom = _calChunkDiff(_startBalFrom, balanceOf(from_));
+            uint256 _chunkDiffTo = _calChunkDiff(balanceOf(to_), _startBalTo);
 
             // Recalculate chunkDiffFrom to account for disparity of chunks and balances
             // This is because we must swap only to the max of the index. 
@@ -420,13 +447,13 @@ abstract contract SFT418 is ChunkProcessable {
         
         // If sender has chunks and there is a chunkDiff, he MUST ALWAYS pool the chunk
         if (ownerToActiveLength[from_] > 0) {
-            uint256 _chunkDiff = _calChunkDiff(_startBalFrom, balanceOf[from_]);
+            uint256 _chunkDiff = _calChunkDiff(_startBalFrom, balanceOf(from_));
             _NFTPoolChunk(from_, _chunkDiff);
         }
 
         // If receiver is a chunk processor and there is a chunkDiff, he redeems a token
         if (_isChunkProcessor(to_)) {
-            uint256 _chunkDiff = _calChunkDiff(balanceOf[to_], _startBalTo);
+            uint256 _chunkDiff = _calChunkDiff(balanceOf(to_), _startBalTo);
             _NFTMintOrRedeem(to_, _chunkDiff);
         }
 
@@ -451,7 +478,7 @@ abstract contract SFT418 is ChunkProcessable {
     function _mint(address to_, uint256 amount_) internal virtual {
 
         // Load the starting balance of the receiver for chunk-size comparisons       
-        uint256 _startBalTo = balanceOf[to_];
+        uint256 _startBalTo = balanceOf(to_);
 
         // Make sure we don't exceed MAX_SUPPLY
         require(MAX_SUPPLY() >= (totalSupply + amount_), 
@@ -461,7 +488,7 @@ abstract contract SFT418 is ChunkProcessable {
         // Overflow check is not needed as it was checked in the require statement above
         unchecked {
             totalSupply += amount_;
-            balanceOf[to_] += amount_;
+            _balanceOf[to_] += amount_;
         }
 
         // ERC20 Native Transfer Event
@@ -471,7 +498,7 @@ abstract contract SFT418 is ChunkProcessable {
         if (_isChunkProcessor(to_)) {
 
             // Calculate chunk differences and run ERC721 minting loop
-            uint256 _chunkDiff = _calChunkDiff(balanceOf[to_], _startBalTo);
+            uint256 _chunkDiff = _calChunkDiff(balanceOf(to_), _startBalTo);
 
             // If there are chunks, operate on them
             if (_chunkDiff > 0) {
@@ -485,10 +512,10 @@ abstract contract SFT418 is ChunkProcessable {
     // _burn function using amount_ as an input
     function _burn(address from_, uint256 amount_) internal virtual {
         // Get the starting balance for chunkDiff comparisons
-        uint256 _startBalFrom = balanceOf[from_];
+        uint256 _startBalFrom = balanceOf(from_);
 
         // Do an ERC20 burn
-        balanceOf[from_] -= amount_;
+        _balanceOf[from_] -= amount_;
 
         unchecked { 
             totalSupply -= amount_;
@@ -497,7 +524,7 @@ abstract contract SFT418 is ChunkProcessable {
         emit Transfer(from_, address(0), amount_);
 
         // Calculate chunk diff
-        uint256 _chunkDiff = _calChunkDiff(_startBalFrom, balanceOf[from_]);
+        uint256 _chunkDiff = _calChunkDiff(_startBalFrom, balanceOf(from_));
 
         // If there are chunks, operate on them
         if (_chunkDiff > 0) {
@@ -553,8 +580,8 @@ abstract contract SFT418 is ChunkProcessable {
     function _ERC721TransferFrom(address from_, address to_, uint256 tokenId_, address msgSender_) internal virtual {
         require(
             from_ == msgSender_ || // from must be sender ||
-            isApprovedForAll[from_][msgSender_] || // sender is approved for all
-            getApproved[tokenId_] == msgSender_, // sender is approved for token
+            _isApprovedForAll[from_][msgSender_] || // sender is approved for all
+            _getApproved[tokenId_] == msgSender_, // sender is approved for token
             "SFT418: _ERC721TransferFrom not approved"
         );
 
@@ -570,17 +597,17 @@ abstract contract SFT418 is ChunkProcessable {
         
         require(
             _owner == msgSender_ || // owner must be sender ||
-            isApprovedForAll[_owner][msgSender_], // sender must be approved for all
+            _isApprovedForAll[_owner][msgSender_], // sender must be approved for all
             "SFT418: _ERC721Approve unauthorized"
         );
 
-        getApproved[tokenId_] = operator_;
-        // Approval event emitted from SFT418Pair side
+        _getApproved[tokenId_] = operator_;
+        NFT.emitApproval(msgSender_, operator_, tokenId_);
     }
 
     function _ERC721SetApprovalForAllSOP(address operator_, bool approved_, address msgSender_) internal virtual {
-        isApprovedForAll[msgSender_][operator_] = approved_;
-        // ApprovalForAll emitted from SFT418Pair side
+        _isApprovedForAll[msgSender_][operator_] = approved_;
+        NFT.emitSetApprovalForAll(msgSender_, operator_, approved_);
     }
 
     function _ERC721OwnerOf(uint256 tokenId_) internal view returns (address) {
@@ -597,7 +624,86 @@ abstract contract SFT418 is ChunkProcessable {
         return chunkToOwners[tokenId_];
     }
 
+    function _viewAllChunkIndexes(address wallet_) internal view returns (uint32[] memory) {
+        return ownerToChunkIndexes[wallet_];
+    }
+
+    /////////////////////////////////
+    // SFT418 Functions /////////////
+    /////////////////////////////////
+
     // left to do: reroll function onwards
+
+    // _rerollInternal is the internal function that handles token rerolls
+    function _rerollInternal(address from_, uint256 tokenId_) internal virtual {
+        // Token must exist and be owned by from_
+        address _owner = chunkToOwners[tokenId_].owner;
+        require(_owner == from_, "SFT418: _reroll _owner is not from_");
+        require(_owner != address(0), "SFT418: _reroll nonexistent token");
+
+        // Make sure there are tokens in the pool to reroll upon
+        uint256 _poolLen = ownerToActiveLength[TOKEN_POOL];
+        require(_poolLen > 0, "SFT418: _reroll insufficient pool balance");
+
+        // Now, we know that the user has a token, and the pool has tokens
+        
+        // Find the token index of the to-be-rerolled token owned by from_
+        uint32 _tokenIndex = chunkToOwners[tokenId_].index;
+
+        // Run a pseudo-random RNG function and generate a pseudo-random redeem index & id
+        uint256 _rng = _getRNG();
+        uint256 _redeemIndex = _rng % _poolLen; // a number between 0 and _poolLen - 1
+        uint32 _redeemId = ownerToChunkIndexes[TOKEN_POOL][_redeemIndex];
+
+        // Swap the owner and index of the two chunks
+        chunkToOwners[tokenId_] = ChunkInfo(
+            TOKEN_POOL,
+            uint32(_redeemIndex)
+        );
+
+        chunkToOwners[_redeemId] = ChunkInfo(
+            _owner,
+            uint32(_tokenIndex)
+        );
+
+        // Swap the chunk indexes storage of the pool and the reroller
+        ownerToChunkIndexes[_owner][_tokenIndex] = _redeemId;
+        ownerToChunkIndexes[TOKEN_POOL][_redeemIndex] = uint32(tokenId_);
+
+        NFT.emitTransfer(_owner, TOKEN_POOL, tokenId_);
+        NFT.emitTransfer(TOKEN_POOL, _owner, _redeemId);
+    }
+
+    // reroll is the internal SFT418Pair ERC721 handler for a user initiated reroll
+    // override to add fees etc
+    function _reroll(uint256 tokenId_, address msgSender_) internal virtual {
+        _rerollInternal(msgSender_, tokenId_);
+    }
+
+    // _repopulateChunksInternal is the internal handler for chunk repopulation of a target
+    function _repopulateChunksInternal(address target_, uint256 amount_) internal virtual {
+        uint256 _balanceOfTarget = balanceOf(target_);
+
+        uint256 _chunksEligible = _balanceOfTarget / CHUNK_SIZE();
+        uint256 _activeChunks = ownerToActiveLength[target_];
+        uint256 _chunkDiff = _chunksEligible - _activeChunks;
+
+        // Repopulate _chunkDiff if amount_ is higher than _chunkDiff
+        uint256 _repopulateAmount = _min(_chunkDiff, amount_); 
+
+        _NFTMintOrRedeem(target_, _repopulateAmount);
+    }
+
+    // _repopulateChunks is the internal handler for SFT418Pair repopulateChunks call
+    function _repopulateChunks(address msgSender_) internal virtual {
+        // repopulate using uint256(max) amount, which means we repopulate all by default
+        _repopulateChunksInternal(
+            msgSender_, 
+            0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+        );
+    }
+
+
     // left to do: erc721 connections
     // optional erc20 magic stuff
 
