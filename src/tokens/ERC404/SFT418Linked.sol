@@ -32,12 +32,12 @@ interface ISFT418Primary {
     function _NFT_getApproved(uint256 tokenId_) external view returns (address);
     function _NFT_isApprovedForAll(address spender_, address operator_) external view returns (bool);
 
-    function _NFT_approve(address spender_, uint256 tokenId_, address msgSender_) external;
-    function _NFT_setApprovalForAll(address operator_, bool approved_, address msgSender_) external;
-    function _NFT_transferFrom(address from_, address to_, uint256 tokenId_) external;
+    function _NFT_approve(address spender_, uint256 tokenId_, address msgSender_) external returns (bool);
+    function _NFT_setApprovalForAll(address operator_, bool approved_, address msgSender_) external returns (bool);
+    function _NFT_transferFrom(address from_, address to_, uint256 tokenId_) external returns (bool);
 
-    function _NFT_mint(address to_, uint256 amount_) external;
-    function _NFT_burn(address from_, uint256 amount_) external;
+    function _NFT_mint(address to_, uint256 amount_) external returns (bool);
+    function _NFT_burn(address from_, uint256 amount_) external returns (bool);
 }
 
 abstract contract SFT418Pair {
@@ -73,6 +73,11 @@ abstract contract SFT418Pair {
     // Deployer for initialization of pairing
     address internal _deployer;
 
+    // Constructor to load _deployer
+    constructor() {
+        _deployer = msg.sender;
+    }
+
     /////////////////////////////////
     // SFT418 Interface Reads ///////
     /////////////////////////////////
@@ -98,15 +103,15 @@ abstract contract SFT418Pair {
     /////////////////////////////////
 
     function approve(address spender_, uint256 tokenId_) public virtual {
-        SFT418._NFT_approve(spender_, tokenId_, msg.sender);
+        require(SFT418._NFT_approve(spender_, tokenId_, msg.sender));
     }
 
     function setApprovalForAll(address operator_, bool approved_) public virtual {
-        SFT418._NFT_setApprovalForAll(operator_, approved_, msg.sender);
+        require(SFT418._NFT_setApprovalForAll(operator_, approved_, msg.sender));
     }
 
     function transferFrom(address from_, address to_, uint256 tokenId_) public virtual {
-        SFT418._NFT_transferFrom(from_, to_, tokenId_);
+        require(SFT418._NFT_transferFrom(from_, to_, tokenId_));
     }
 
     /////////////////////////////////
@@ -114,11 +119,11 @@ abstract contract SFT418Pair {
     /////////////////////////////////
 
     function _mint(address to_, uint256 amount_) internal virtual {
-        SFT418._NFT_mint(to_, amount_);
+        require(SFT418._NFT_mint(to_, amount_));
     }
 
     function _burn(address from_, uint256 amount_) internal virtual {
-        SFT418._NFT_burn(from_, amount_);
+        require(SFT418._NFT_burn(from_, amount_));
     }
 
     /////////////////////////////////
@@ -135,12 +140,12 @@ abstract contract SFT418Pair {
     }
 
     function safeTransferFrom(address from_, address to_, uint256 tokenId_, bytes calldata data_) public virtual {
-        SFT418._NFT_transferFrom(from_, to_, tokenId_);
+        transferFrom(from_, to_, tokenId_);
         _checkOnERC721Received(from_, to_, tokenId_, data_);
     }
 
     function safeTransferFrom(address from_, address to_, uint256 tokenId_) public virtual {
-        SFT418._NFT_transferFrom(from_, to_, tokenId_);
+        transferFrom(from_, to_, tokenId_);
         _checkOnERC721Received(from_, to_, tokenId_, "");
     }
 
@@ -168,7 +173,7 @@ abstract contract SFT418Pair {
         }
     }
 
-    modifier sft418fallback() virtual {
+    modifier SFT418Fallback() virtual {
         // Grab the first bytes32 of calldata and right shift bytes28 resulting in bytes4 selector
         bytes4 l_fnSelector = bytes4(bytes32(_calldataload(0x00) >> 224)); 
 
@@ -260,6 +265,11 @@ abstract contract SFT418Pair {
 
         _;
     }
+
+    // Hook the SFT418Fallback into fallback()
+    fallback() external virtual SFT418Fallback {
+        revert ("Unrecognized calldata");
+    }
 }
 
 abstract contract ERC721TokenReceiver {
@@ -271,4 +281,13 @@ abstract contract ERC721TokenReceiver {
     ) external virtual returns (bytes4) {
         return ERC721TokenReceiver.onERC721Received.selector;
     }
+}
+
+contract SFT418PairDemo is SFT418Pair {
+    
+    function tokenURI(uint256) public virtual pure override(SFT418Pair) 
+    returns (string memory) {
+        return "";
+    }
+
 }

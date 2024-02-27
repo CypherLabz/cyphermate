@@ -583,12 +583,12 @@ abstract contract SFT418 is ChunkProcessable {
     // ERC721-Pair Functions ////////
     /////////////////////////////////
 
-    function _ERC721TransferFrom(address from_, address to_, uint256 tokenId_, address msgSender_) internal virtual {
+    function _NFT_TransferFrom(address from_, address to_, uint256 tokenId_, address msgSender_) internal virtual {
         require(
             from_ == msgSender_ || // from must be sender ||
             _isApprovedForAll[from_][msgSender_] || // sender is approved for all
             _getApproved[tokenId_] == msgSender_, // sender is approved for token
-            "SFT418: _ERC721TransferFrom not approved"
+            "SFT418: _NFT_TransferFrom not approved"
         );
 
         _chunkTransfer(from_, to_, tokenId_);
@@ -596,34 +596,42 @@ abstract contract SFT418 is ChunkProcessable {
 
     // safeTransferFroms are in SFT418Pair
 
-    // SOP = State OPeration -- they indicate that they only affect state (incomplete) 
+    //  = State OPeration -- they indicate that they only affect state (incomplete) 
     // and must be accompanied by SFT418Pair's side of the execution as well
-    function _ERC721ApproveStateSOP(address operator_, uint256 tokenId_, address msgSender_) internal virtual {
+    function _NFT_approve(address operator_, uint256 tokenId_, address msgSender_) internal virtual {
         address _owner = chunkToOwners[tokenId_].owner;
         
         require(
             _owner == msgSender_ || // owner must be sender ||
             _isApprovedForAll[_owner][msgSender_], // sender must be approved for all
-            "SFT418: _ERC721Approve unauthorized"
+            "SFT418: _NFT_Approve unauthorized"
         );
 
         _getApproved[tokenId_] = operator_;
         NFT.emitApproval(msgSender_, operator_, tokenId_);
     }
 
-    function _ERC721SetApprovalForAllSOP(address operator_, bool approved_, address msgSender_) internal virtual {
+    function _NFT_setApprovalForAll(address operator_, bool approved_, address msgSender_) internal virtual {
         _isApprovedForAll[msgSender_][operator_] = approved_;
         NFT.emitSetApprovalForAll(msgSender_, operator_, approved_);
     }
 
-    function _ERC721OwnerOf(uint256 tokenId_) internal view returns (address) {
+    function _NFT_ownerOf(uint256 tokenId_) internal view returns (address) {
         address _owner = chunkToOwners[tokenId_].owner;
         require(_owner != address(0), "SFT418: ownerOf nonexistent token");
         return _owner;
     }
 
-    function _ERC721BalanceOf(address wallet_) internal view returns (uint256) {
+    function _NFT_balanceOf(address wallet_) internal view returns (uint256) {
         return ownerToActiveLength[wallet_];
+    }
+
+    function _NFT_getApproved(uint256 tokenId_) internal view returns (address) {
+        return _getApproved[tokenId_];
+    }
+
+    function _NFT_isApprovedForAll(address owner_, address operator_) internal view returns (bool) {
+        return _isApprovedForAll[owner_][operator_];
     }
 
     function _getChunkInfo(uint256 tokenId_) internal view returns (ChunkInfo memory) {
@@ -759,13 +767,31 @@ abstract contract SFT418 is ChunkProcessable {
 
     // fallback functions for contract-pair internal interactions
     // fallback inspired by DN404. Extremely clever and optimized interactions implementation!
+
+    // error NotPair();
+
+    function _requirePair(address pair_, address sender_) internal pure {
+        require(pair_ == sender_, "SFT418: fallback() sender is not pair");
+    }
+
     function _calldataload(uint256 offset_) private pure returns (uint256 _value) {
         assembly {
             _value := calldataload(offset_)
         }
     }
 
-    modifier sft418fallback() virtual {
+    function _addrload(uint256 offset_) private pure returns (address) {
+        return address(uint160(_calldataload(offset_)));
+    }
+
+    function _fbreturn(uint256 word_) private pure {
+        assembly {
+            mstore(0x00, word_)
+            return(0x00, 0x20)
+        }
+    }
+
+    modifier SFT418Fallback() virtual {
         
         // Grab the function selector from the calldata
         uint256 _fnSelector = _calldataload(0x00) >> 224;
@@ -773,16 +799,72 @@ abstract contract SFT418 is ChunkProcessable {
         // Load the NFT SFT418Pair address
         address _pairAddress = address(NFT);
 
-        // Function-selector-flows
-        // bytes4(keccak256(abi.encodePacked("NFTChunkTransfer(address,address,uint256")))
-        if (_fnSelector == 0xdadccdc8) {
+        /////////////////////////////////
+        // SFT418 Fallback Reads ////////
+        /////////////////////////////////
 
+        // "_NFT_ownerOf(uint256)" >> "0x4d2e596a"
+        if (_fnSelector == 0x4d2e596a) {
+            _requirePair(_pairAddress, msg.sender);
+            _fbreturn(uint160(_NFT_ownerOf(_calldataload(0x04))));
         }
+
+        // "_NFT_balanceOf(address)" >> "0x00259978"
+        if (_fnSelector == 0x00259978) {
+            _requirePair(_pairAddress, msg.sender);
+            _fbreturn(_NFT_balanceOf(_addrload(0x04)));
+        }
+
+        //  "_NFT_getApproved(uint256)" >> "0xc58aa1bd"
+        if (_fnSelector == 0xc58aa1bd) {
+            _requirePair(_pairAddress, msg.sender);
+            _fbreturn(uint160(_NFT_getApproved(_calldataload(0x04))));
+        }
+
+        // "_NFT_isApprovedForAll(address,address)" >> "0x69c6952a"
+        if (_fnSelector == 0x69c6952a) {
+            _requirePair(_pairAddress, msg.sender);
+            
+            bool _approved = _NFT_isApprovedForAll(_addrload(0x04), _addrload(0x24));
+
+            // Why doesn't solidity allow bool -> uint conversions o_o
+            // Note: we can just store isApprovedForAll as a uint256 instead of bool
+            // but for readability / familiarity we will do this conversion instead
+            if (_approved) {
+                _fbreturn(1);
+            }
+
+            else {
+                _fbreturn(0);
+            }
+        }
+
+        /////////////////////////////////
+        // SFT418 Fallback Writes ///////
+        /////////////////////////////////
+
+        // "_NFT_approve(address,uint256)" >> "0x58fd2105"
+        // msg.sender can be gotten from the next 32-byte word after calldata
+        if (_fnSelector == 0x58fd2105) {
+            _requirePair(_pairAddress, msg.sender);
+            _NFT_approve(_addrload(0x04), _calldataload(0x24), _addrload(0x44));
+            _fbreturn(1);
+        }
+
+        // "_NFT_setApprovalForAll(address,bool)" >> "0x0a60edd1"
+        if (_fnSelector == 0x0a60edd1) {
+            _requirePair(_pairAddress, msg.sender);
+            _NFT_setApprovalForAll(_addrload(0x04), (_calldataload(0x24) != 0), _addrload(0x44));
+            _fbreturn(1);
+        }
+
+        
+
 
         _;
     }
 
-    fallback() external virtual sft418fallback {
+    fallback() external virtual SFT418Fallback {
         revert ("Unrecognized calldata");
     }
 }
