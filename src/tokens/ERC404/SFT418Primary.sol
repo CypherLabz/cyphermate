@@ -583,12 +583,12 @@ abstract contract SFT418 is ChunkProcessable {
     // ERC721-Pair Functions ////////
     /////////////////////////////////
 
-    function _NFT_TransferFrom(address from_, address to_, uint256 tokenId_, address msgSender_) internal virtual {
+    function _NFT_transferFrom(address from_, address to_, uint256 tokenId_, address msgSender_) internal virtual {
         require(
             from_ == msgSender_ || // from must be sender ||
             _isApprovedForAll[from_][msgSender_] || // sender is approved for all
             _getApproved[tokenId_] == msgSender_, // sender is approved for token
-            "SFT418: _NFT_TransferFrom not approved"
+            "SFT418: _NFT_transferFrom not approved"
         );
 
         _chunkTransfer(from_, to_, tokenId_);
@@ -604,7 +604,7 @@ abstract contract SFT418 is ChunkProcessable {
         require(
             _owner == msgSender_ || // owner must be sender ||
             _isApprovedForAll[_owner][msgSender_], // sender must be approved for all
-            "SFT418: _NFT_Approve unauthorized"
+            "SFT418: _NFT_approve unauthorized"
         );
 
         _getApproved[tokenId_] = operator_;
@@ -618,7 +618,7 @@ abstract contract SFT418 is ChunkProcessable {
 
     function _NFT_ownerOf(uint256 tokenId_) internal view returns (address) {
         address _owner = chunkToOwners[tokenId_].owner;
-        require(_owner != address(0), "SFT418: ownerOf nonexistent token");
+        require(_owner != address(0), "SFT418: _NFT_ownerOf nonexistent token");
         return _owner;
     }
 
@@ -858,7 +858,23 @@ abstract contract SFT418 is ChunkProcessable {
             _fbreturn(1);
         }
 
-        
+        // "_NFT_transferFrom(address,address,uint256)" >> "0x221d61cf"
+        if (_fnSelector == 0x221d61cf) {
+            _requirePair(_pairAddress, msg.sender);
+            _NFT_transferFrom(_addrload(0x04), _addrload(0x24), _calldataload(0x44), _addrload(0x64));
+            _fbreturn(1);
+        }
+
+        // "_NFT_mint(address,uint256)" >> "0x3dd17a5e"
+        if (_fnSelector == 0x3dd17a5e) {
+
+        }
+
+        // "_NFT_burn(address,uint256)" >> "0xa2352255"
+        if (_fnSelector == 0xa2352255) {
+            
+        }
+
 
 
         _;
