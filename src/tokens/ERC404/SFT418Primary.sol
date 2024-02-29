@@ -798,63 +798,54 @@ abstract contract SFT418 is ChunkProcessable {
         require(pair_ == sender_, "SFT418: fallback() sender is not pair");
     }
 
-    function _calldataload(uint256 offset_) private pure returns (uint256 _value) {
+    function _calldataload(uint256 offset_) internal pure returns (uint256 _value) {
         assembly {
             _value := calldataload(offset_)
         }
     }
 
-    function _addrload(uint256 offset_) private pure returns (address) {
+    function _addrload(uint256 offset_) internal pure returns (address) {
         return address(uint160(_calldataload(offset_)));
     }
 
-    function _fbreturn(uint256 word_) private pure {
+    function _fbreturn(uint256 word_) internal pure {
         assembly {
             mstore(0x00, word_)
             return(0x00, 0x20)
         }
     }
 
-    function _SFT418Fallback() internal virtual {
-        
-    }
-
-    modifier SFT418Fallback() virtual {
-        
-        // Grab the function selector from the calldata
-        uint256 _fnSelector = _calldataload(0x00) >> 224;
-
-        // Load the NFT SFT418Pair address
-        address _pairAddress = address(NFT);
+    function _SFT418FallbackHook(uint256 fnSelector_, address pairAddress_) 
+    internal virtual returns (uint256) {
 
         /////////////////////////////////
         // SFT418 Fallback Reads ////////
         /////////////////////////////////
 
         // "_NFT_ownerOf(uint256)" >> "0x4d2e596a"
-        if (_fnSelector == 0x4d2e596a) {
-            _requirePair(_pairAddress, msg.sender);
-            _fbreturn(uint160(_NFT_ownerOf(_calldataload(0x04))));
+        if (fnSelector_ == 0x4d2e596a) {
+            _requirePair(pairAddress_, msg.sender);
+            return uint160(_NFT_ownerOf(_calldataload(0x04)));
         }
 
         // "_NFT_balanceOf(address)" >> "0x00259978"
-        if (_fnSelector == 0x00259978) {
-            _requirePair(_pairAddress, msg.sender);
-            _fbreturn(_NFT_balanceOf(_addrload(0x04)));
+        if (fnSelector_ == 0x00259978) {
+            _requirePair(pairAddress_, msg.sender);
+            return _NFT_balanceOf(_addrload(0x04));
         }
 
         //  "_NFT_getApproved(uint256)" >> "0xc58aa1bd"
-        if (_fnSelector == 0xc58aa1bd) {
-            _requirePair(_pairAddress, msg.sender);
-            _fbreturn(uint160(_NFT_getApproved(_calldataload(0x04))));
+        if (fnSelector_ == 0xc58aa1bd) {
+            _requirePair(pairAddress_, msg.sender);
+            return uint160(_NFT_getApproved(_calldataload(0x04)));
         }
 
         // "_NFT_isApprovedForAll(address,address)" >> "0x69c6952a"
-        if (_fnSelector == 0x69c6952a) {
-            _requirePair(_pairAddress, msg.sender);
+        if (fnSelector_ == 0x69c6952a) {
+            _requirePair(pairAddress_, msg.sender);
             bool _approved = _NFT_isApprovedForAll(_addrload(0x04), _addrload(0x24));
             // sol doesnt allow bool -> uint256 conversion, strangely enough
-            if (_approved) _fbreturn(1); else _fbreturn(0); 
+            if (_approved) return 1; else return 0; 
         }
 
         /////////////////////////////////
@@ -863,61 +854,74 @@ abstract contract SFT418 is ChunkProcessable {
 
         // "_NFT_approve(address,uint256)" >> "0x58fd2105"
         // msg.sender can be gotten from the next 32-byte word after calldata
-        if (_fnSelector == 0x58fd2105) {
-            _requirePair(_pairAddress, msg.sender);
+        if (fnSelector_ == 0x58fd2105) {
+            _requirePair(pairAddress_, msg.sender);
             _NFT_approve(_addrload(0x04), _calldataload(0x24), _addrload(0x44));
-            _fbreturn(1);
+            return 1;
         }
 
         // "_NFT_setApprovalForAll(address,bool)" >> "0x0a60edd1"
-        if (_fnSelector == 0x0a60edd1) {
-            _requirePair(_pairAddress, msg.sender);
+        if (fnSelector_ == 0x0a60edd1) {
+            _requirePair(pairAddress_, msg.sender);
             _NFT_setApprovalForAll(_addrload(0x04), (_calldataload(0x24) != 0), _addrload(0x44));
-            _fbreturn(1);
+            return 1;
         }
 
         // "_NFT_transferFrom(address,address,uint256)" >> "0x221d61cf"
-        if (_fnSelector == 0x221d61cf) {
-            _requirePair(_pairAddress, msg.sender);
+        if (fnSelector_ == 0x221d61cf) {
+            _requirePair(pairAddress_, msg.sender);
             _NFT_transferFrom(_addrload(0x04), _addrload(0x24), _calldataload(0x44), _addrload(0x64));
-            _fbreturn(1);
+            return 1;
         }
 
         // This is the version that does an incremental mint, not a tokenId based one
         // "_NFT_mint(address,uint256)" >> "0x3dd17a5e"
-        if (_fnSelector == 0x3dd17a5e) {
-            _requirePair(_pairAddress, msg.sender);
+        if (fnSelector_ == 0x3dd17a5e) {
+            _requirePair(pairAddress_, msg.sender);
             _mint(_addrload(0x04), (_calldataload(0x24) * CHUNK_SIZE()));
-            _fbreturn(1);
+            return 1;
         }
 
         // "_NFT_burn(address,uint256)" >> "0xa2352255"
-        if (_fnSelector == 0xa2352255) {
-            _requirePair(_pairAddress, msg.sender);
+        if (fnSelector_ == 0xa2352255) {
+            _requirePair(pairAddress_, msg.sender);
             _NFT_burn(_addrload(0x04), _calldataload(0x24));
-            _fbreturn(1);
+            return 1;
         }
 
         // Here, we have special SFT418 chunk manipulation functions
         // "_NFT_reroll(uint256)" >> "0x9c2be510"
-        if (_fnSelector == 0x9c2be510) {
-            _requirePair(_pairAddress, msg.sender);
+        if (fnSelector_ == 0x9c2be510) {
+            _requirePair(pairAddress_, msg.sender);
             _NFT_reroll(_addrload(0x04), _calldataload(0x24), _addrload(0x44));
-            _fbreturn(1);
+            return 1;
         }
 
         // "_NFT_repopulateChunks()" >> "0xf36c9b2a"
-        if (_fnSelector == 0xf36c9b2a) {
-            _requirePair(_pairAddress, msg.sender);
+        if (fnSelector_ == 0xf36c9b2a) {
+            _requirePair(pairAddress_, msg.sender);
             _NFT_repopulateChunks(_addrload(0x04));
-            _fbreturn(1);
+            return 1;
         }
 
-        _;
+        return 0;
     }
 
-    fallback() external virtual SFT418Fallback {
-        revert ("Unrecognized calldata");
+    // _SFT418FallbackHookExtra is for adding additional hooks into fallback()
+    function _SFT418FallbackHookExtra(uint256 fnSelector_, address pairAddress_) internal virtual returns (uint256) {}
+
+    fallback() external virtual {
+
+        // Load the function selector and pair address
+        uint256 _fnSelector = _calldataload(0x00) >> 224;
+        address _pairAddress = address(NFT);
+
+        // Return value of fallback function to r. If r is 0, continue.
+        uint256 r = _SFT418FallbackHook(_fnSelector, _pairAddress);
+        if (r == 0) r = _SFT418FallbackHookExtra(_fnSelector, _pairAddress);
+
+        // Return the final value of r
+        _fbreturn(r);
     }
 }
 
@@ -962,12 +966,16 @@ contract SFT418Demo is SFT418 {
 
 abstract contract SFT418Swap is SFT418 {
 
-    function _NFT_swap(uint256 fromId_, uint256 toId_, uint256 fee_, address feeTarget_, 
-    address msgSender_) internal virtual {
+    function _NFT_swap(uint256 fromId_, uint256 toId_, uint256 feeInBasisPoints_, address feeTarget_, address msgSender_, bool isUserInitiatedCall_) internal virtual {
 
         // Make sure the token to be swapped exists
         address _ownerFrom = chunkToOwners[fromId_].owner;
         require(_ownerFrom != address(0), "SFT418S: _NFT_swap nonexistent fromToken");
+
+        // If it's a user-initiated request, make sure msgSender_ is _ownerFrom
+        if (isUserInitiatedCall_) {
+            require(_ownerFrom == msgSender_, "SFT418S: _NFT_swap user initiated exception");
+        }
 
         // Make sure the to-be-swapped-to token is owned by the pool
         address _ownerTo = chunkToOwners[toId_].owner;
@@ -975,10 +983,11 @@ abstract contract SFT418Swap is SFT418 {
 
         // Make sure there's available fees to deduct from the user
         uint256 _remainderFrom = _balanceOf[_ownerFrom] % CHUNK_SIZE();
-        require(_remainderFrom >= fee_, "SFT418S: _NFT_swap not enough remainder for fees");
+        uint256 _fee = (CHUNK_SIZE()/ 100_000) * feeInBasisPoints_;
+        require(_remainderFrom >= _fee, "SFT418S: _NFT_swap not enough remainder for fees");
 
         // Transfer the fee to the feeTarget_, if there is one
-        if (fee_ > 0 && feeTarget_ != address(0)) _transfer(msgSender_, feeTarget_, fee_);
+        if (_fee > 0 && feeTarget_ != address(0)) _transfer(msgSender_, feeTarget_, _fee);
 
         // Swap chunks
         uint256 _indexFrom = chunkToOwners[fromId_].index;
@@ -1004,12 +1013,29 @@ abstract contract SFT418Swap is SFT418 {
         NFT.emitTransfer(TOKEN_POOL, _ownerFrom, toId_);
     }
 
-    modifier SFT418Fallback override(SFT418) {
-        
-
-        _;
+    function _NFT_swapUserInitiated(uint256 fromId_, uint256 toId_, uint256 fee_, 
+    address feeTarget_, address msgSender_) internal virtual {
+        _NFT_swap(fromId_, toId_, fee_, feeTarget_, msgSender_, true);
     }
 
+    function _SFT418FallbackHookExtra(uint256 fnSelector_, address pairAddress_) internal virtual 
+    override(SFT418) returns (uint256) {
+        
+        // "_NFT_swapUserInitiated(uint256,uint256,uint256,address,address)" > "0xa0fc03ee"
+        if (fnSelector_ == 0xa0fc03ee) {
+            _requirePair(pairAddress_, msg.sender);
+            _NFT_swapUserInitiated(
+                _calldataload(0x04), 
+                _calldataload(0x24), 
+                _calldataload(0x44),
+                _addrload(0x64),
+                _addrload(0x84)
+            );
+            return 1;
+        }
+
+        return 0;
+    }
 }
 
 contract SFT418SDemo is SFT418Swap {

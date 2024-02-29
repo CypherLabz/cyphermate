@@ -41,6 +41,10 @@ interface ISFT418Primary {
 
     function _NFT_reroll(address from_, uint256 tokenId_, address msgSender_) external returns (bool);
     function _NFT_repopulateChunks(address msgSender_) external returns (bool);
+
+    // SFT418S
+    function _NFT_swapUserInitiated(uint256 fromId_, uint256 toId_, uint256 fee_,
+    address feeTarget_, address msgSender_) external returns (bool);
 }
 
 abstract contract SFT418Pair {
@@ -307,4 +311,36 @@ contract SFT418PairDemo is SFT418Pair {
         return "";
     }
 
+}
+
+import { Ownable } from "../../access/Ownable.sol";
+
+abstract contract SFT418PairSwap is SFT418Pair, Ownable {
+
+    event SwapFeesReceiverSet(address indexed operator, address indexed receiver);
+    event SwapFeeSet(address indexed operator, uint256 fee);
+
+    address public SWAP_FEE_RECEIVER;
+    uint256 public SWAP_FEE; // In basis points
+
+    function setSwapFeeReceiver(address receiver_) public virtual onlyOwner {
+        SWAP_FEE_RECEIVER = receiver_;
+        emit SwapFeesReceiverSet(msg.sender, receiver_);
+    }
+
+    function setSwapFee(uint256 fee_) public virtual onlyOwner {
+        SWAP_FEE = fee_;
+        emit SwapFeeSet(msg.sender, fee_);
+    }
+
+    // A user-initiated swap of an owned token to a pooled token
+    function swap(uint256 fromId_, uint256 toId_) public virtual {
+        require(SFT418._NFT_swapUserInitiated(
+            fromId_,
+            toId_,
+            SWAP_FEE,
+            SWAP_FEE_RECEIVER,
+            msg.sender
+        ));
+    }
 }
