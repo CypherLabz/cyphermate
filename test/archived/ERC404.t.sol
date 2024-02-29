@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 
 import "forge-std/Test.sol";
 import "forge-std/console.sol";
-import "../src/tokens/SFT418/SFT418Primary.sol";
+import "cyphermate/tokens/SFT418/SFT418.sol";
 
 contract ERC404Test is Test {
     // SFT418Demo private token;

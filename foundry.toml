@@ -4,5 +4,8 @@ out = "out"
 libs = ["lib"]
 optimizer = true
 optimizer_runs = 1_000
+remappings = [
+    "cyphermate=src"
+]
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options

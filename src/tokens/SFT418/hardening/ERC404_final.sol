@@ -2,7 +2,7 @@
 // Last update: 2024-02-23
 pragma solidity ^0.8.20;
 
-import { Ownable } from "../../access/Ownable.sol";
+import { Ownable } from "../../../access/Ownable.sol";
 
 // Reroll -> Random
 // Royalties on a Trade to royalty receiver.
@@ -1213,7 +1213,12 @@ abstract contract ERC404Wrapper is ERC404PoolSwap {
 }
 
 contract MockERC404 is ERC404PoolSwap {
-    constructor(string memory name_, string memory symbol_) ERC404(name_, symbol_) {}
+    
+    constructor(string memory name_, string memory symbol_) 
+        ERC404(name_, symbol_) 
+        Ownable(msg.sender)
+    {}
+
     function tokenURI(uint256) public pure override(ERC404) returns (string memory) {
         return "";
     }

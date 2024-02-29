@@ -14,8 +14,8 @@ abstract contract Ownable {
         _;
     }
 
-    constructor () {
-        _transferOwnership(msg.sender);
+    constructor (address owner_) {
+        _transferOwnership(owner_);
     }
 
     function _transferOwnership(address newOwner_) internal virtual {
