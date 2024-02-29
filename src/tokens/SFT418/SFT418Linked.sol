@@ -315,7 +315,7 @@ contract SFT418PairDemo is SFT418Pair {
 
 import { Ownable } from "../../access/Ownable.sol";
 
-abstract contract SFT418PairSwap is SFT418Pair, Ownable {
+abstract contract SFT418SPair is SFT418Pair, Ownable {
 
     event SwapFeesReceiverSet(address indexed operator, address indexed receiver);
     event SwapFeeSet(address indexed operator, uint256 fee);
@@ -343,4 +343,20 @@ abstract contract SFT418PairSwap is SFT418Pair, Ownable {
             msg.sender
         ));
     }
+}
+
+abstract contract SFT418WPair is SFT418SPair {
+
+    event TokenWrapped(address indexed sender, uint256 indexed tokenId);
+    event TokenUnwrapped(address indexed sender, uint256 indexed tokenId);
+    
+    // "TokenWrapped(address,uint256)"
+    bytes32 internal constant _TOKEN_WRAPPED_EVENT_SIGNATURE =
+        0x2273a99739c31a37346636a3013c2cedebee7cd5b4c560faded39d298c1dd45c;
+    
+    // "TokenUnwrapped(address,uint256)"
+    bytes32 internal constant _TOKEN_UNWRAPPED_EVENT_SIGNATURE = 
+        0x7f8146ca1ae17ad17561461ef221d97c8160bfddcae0edb68f53ce8dc5ce4af3;
+
+    
 }

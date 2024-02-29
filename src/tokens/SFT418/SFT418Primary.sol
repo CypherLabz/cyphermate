@@ -964,7 +964,7 @@ contract SFT418Demo is SFT418 {
 
 // }
 
-abstract contract SFT418Swap is SFT418 {
+abstract contract SFT418S is SFT418 {
 
     function _NFT_swap(uint256 fromId_, uint256 toId_, uint256 feeInBasisPoints_, address feeTarget_, address msgSender_, bool isUserInitiatedCall_) internal virtual {
 
@@ -1038,10 +1038,160 @@ abstract contract SFT418Swap is SFT418 {
     }
 }
 
-contract SFT418SDemo is SFT418Swap {
+contract SFT418SDemo is SFT418S {
     
     constructor(string memory name_, string memory symbol_) 
         SFT418(name_, symbol_)
+    {}
+
+}
+
+/**
+ * SFT418Wrap (SFT418W) is a wrapper contract for existing ERC721 tokens.
+ * wrap() bridges the NFT to SFT418W, and unwrap() bridges the NFT back to ERC721
+ * token IDs are kept and retained. The contract works on a pool basis, so IDs are 
+ * predictable and accurate.
+ */
+
+interface IERC721 {
+    function ownerOf(uint256 tokenId_) external view returns (address);
+    function transferFrom(address from_, address to_, uint256 tokenId_) external;
+}
+
+abstract contract SFT418W is SFT418S {
+
+    address public immutable ERC721_INTERFACE;
+
+    constructor(address interface_) {
+        ERC721_INTERFACE = interface_;
+    }
+
+    // Override _mint and _burn (ERC20-based) and nullify it. 
+    // This is because in SFT418W, we are only exposing NFT-based methods
+    function _mint(address, uint256) internal pure override(SFT418) {}
+    function _burn(address, uint256) internal pure override(SFT418) {}
+
+    // Override TOTAL_CHUNKS because total is now equal to wrapped. This is very important.
+    function TOTAL_CHUNKS() public virtual override(SFT418) returns (uint256) {
+        return mintedTokens;
+    }
+
+    function _NFT_wrap(uint256 tokenId_, address msgSender_) internal virtual {
+        
+        // Make sure that the msgSender_ owns tokenId_
+        // This is required because some ERC404 implementations break this assumption.
+        address _ERC721OwnerOfBefore = IERC721(ERC721_INTERFACE).ownerOf(tokenId_);
+        require(_ERC721OwnerOfBefore == msgSender_, 
+            "SFT418W: wrap origin token owner exception");
+
+        // Transfer the NFT from the msgSender_ to the SFT418Pair contract
+        IERC721(ERC721_INTERFACE).transferFrom(msgSender_, msg.sender, tokenId_);
+
+        // Make sure after the transfer, that we own the token.
+        address _ERC721OwnerOfAfter = IERC721(ERC721_INTERFACE).ownerOf(tokenId_);
+        require(_ERC721OwnerOfAfter == msg.sender, 
+            "SFT418W: wrap origin token transfer exception");
+
+        // Make sure the owner of the NFT exists
+        address _ownerBefore = chunkToOwners[tokenId_].owner;
+        require(_ownerBefore == address(0), "SFT418W: wrap owner exception");
+
+        // ERC20 mint of a CHUNK_SIZE amount of tokens to msgSender_
+        totalSupply += CHUNK_SIZE();
+
+        unchecked {
+            _balanceOf[msgSender_] += CHUNK_SIZE();
+        }
+
+        emit Transfer(address(0), msgSender_, CHUNK_SIZE());
+
+        // ERC721 mint of tokenId_ to msgSender_
+        _pushChunk(msgSender_, tokenId_);
+
+        unchecked {
+            mintedTokens++;
+        }
+
+        NFT.emitTransfer(address(0), msgSender_, tokenId_);
+        // NFT SFT418WPair should emit TokenWrapped(sender, tokenId);
+    }
+
+    function _NFT_unwrap(uint256 tokenId_, address msgSender_) internal virtual {
+
+        // Make sure that msgSender_ owns tokenId_ chunk
+        // This is required because of a multitude of reasons. xD
+        address _owner = chunkToOwners[tokenId_].owner;
+        require(_owner != address(0), "SFT418W: unwrap nonexistent token");
+        require(_owner == msgSender_, "SFT418W: unwrap not initiated from owner");
+
+        // ERC20 burn a CHUNK_SIZE amount of tokens from msgSender_
+        _balanceOf[msg.sender] -= CHUNK_SIZE();
+
+        unchecked {
+            totalSupply -= CHUNK_SIZE();
+        }
+
+        emit Transfer(msgSender_, address(0), CHUNK_SIZE());
+
+        // Reorder the chunk stack and decrement activeIndex to effectively remove
+        // the token from their holdings
+        uint256 _activeIndex = ownerToActiveLength[msgSender_] - 1;
+        
+        // Reorder the chunk, and then pop (phantom) the chunk
+        _reorderChunk(msgSender_, tokenId_, _activeIndex);
+        _popChunk(msgSender_);
+
+        // Burn the chunk data
+        delete chunkToOwners[tokenId_];
+        delete _getApproved[tokenId_];
+
+        // Emit the burn
+        NFT.emitTransfer(_owner, address(0), tokenId_);
+
+        // Make sure that the msgSender_ owns tokenId_
+        // This is required because some ERC404 implementations break this assumption.
+        address _ERC721OwnerOfBefore = IERC721(ERC721_INTERFACE).ownerOf(tokenId_);
+        require(_ERC721OwnerOfBefore == msg.sender, 
+            "SFT418W: wrap origin token owner exception");
+
+        // Transfer the wrapped NFT to the owner
+        IERC721(ERC721_INTERFACE).transferFrom(msg.sender, msgSender_, tokenId_);
+
+        // Make sure after the transfer, that we own the token.
+        address _ERC721OwnerOfAfter = IERC721(ERC721_INTERFACE).ownerOf(tokenId_);
+        require(_ERC721OwnerOfAfter == msgSender_, 
+            "SFT418W: wrap origin token transfer exception");
+
+        // NFT SFT418WPair should emit TokenUnwrapped(sender, tokenId);
+    }
+
+    function _SFT418FallbackHookExtra(uint256 fnSelector_, address pairAddress_) internal 
+    virtual override(SFT418S) returns (uint256) {
+        SFT418S._SFT418FallbackHookExtra(fnSelector_, pairAddress_);
+
+        // "_NFT_wrap(uint256,address)" >> "0x55ae6b03"
+        if (fnSelector_ == 0x55ae6b03) {
+            _requirePair(pairAddress_, msg.sender);
+            _NFT_wrap(_calldataload(0x04), _addrload(0x24));
+            return 1;
+        }
+
+        // "_NFT_unwrap(uint256,address)" >> "0xba12808f"
+        if (fnSelector_ == 0xba12808f) {
+            _requirePair(pairAddress_, msg.sender);
+            _NFT_unwrap(_calldataload(0x04), _addrload(0x24));
+            return 1;
+        }
+
+        return 0;
+    }
+}
+
+contract SFT418WDemo is SFT418W {
+
+    constructor(string memory name_, string memory symbol_, address interface_) 
+        SFT418(name_, symbol_) 
+        SFT418W(interface_)
     {}
 
 }

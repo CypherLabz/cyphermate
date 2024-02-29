@@ -3,11 +3,10 @@ pragma solidity ^0.8.0;
 
 import "forge-std/Test.sol";
 import "forge-std/console.sol";
-import "../src/tokens/ERC404/ERC404.sol";
 import "../src/tokens/ERC404/SFT418Primary.sol";
 
 contract ERC404Test is Test {
-    MockERC404 private token;
+    SFT418Demo private token;
     address private constant ZERO_ADDRESS = address(0);
     address private alice;
     address private bob;
@@ -15,7 +14,7 @@ contract ERC404Test is Test {
     uint private constant INITIAL_SUPPLY = 1000 * 10 ** 18;
 
     function setUp() public {
-        token = new MockERC404("Token", "TKN");
+        token = new SFT418Demo("Token", "TKN");
         alice = address(1);
         bob = address(2);
         charlie = address(3);
