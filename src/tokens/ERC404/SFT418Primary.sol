@@ -634,6 +634,25 @@ abstract contract SFT418 is ChunkProcessable {
         return _isApprovedForAll[owner_][operator_];
     }
 
+    function _NFT_burn(address from_, uint256 tokenId_) internal {
+        address _owner = chunkToOwners[tokenId_].owner;
+
+        require(_owner != address(0), "SFT418: _NFT_burn nonexistent token");
+        require(_owner == from_, "SFT418: _NFT_burn incorrect owner");
+
+        // Burn a chunk size on an NFT transfer, always
+        _balanceOf[from_] -= CHUNK_SIZE();
+
+        unchecked {
+            totalSupply -= CHUNK_SIZE();
+        }
+
+        emit Transfer(from_, address(0), CHUNK_SIZE());
+
+        // Now, do a _NFTTransfer which transfers only the NFT. We pool the NFT, not burn.
+        _NFTTransfer(from_, TOKEN_POOL, tokenId_);
+    }
+
     function _getChunkInfo(uint256 tokenId_) internal view returns (ChunkInfo memory) {
         return chunkToOwners[tokenId_];
     }
@@ -689,9 +708,14 @@ abstract contract SFT418 is ChunkProcessable {
     }
 
     // reroll is the internal SFT418Pair ERC721 handler for a user initiated reroll
-    // override to add fees etc
-    function _reroll(uint256 tokenId_, address msgSender_) internal virtual {
-        _rerollInternal(msgSender_, tokenId_);
+    // the reason we pass from_ and msgSender_ is to allow different permission scopes
+    // and authorized users to reroll by using _rollInternal (yes devs, im talking to you)
+    function _NFT_reroll(address from_, uint256 tokenId_, address msgSender_) 
+    internal virtual {
+        require(from_ == msgSender_, "SFT418: _NFT_reroll must be user-initiated");
+        address _owner = chunkToOwners[tokenId_].owner;
+        require(_owner == msgSender_, "SFT418: _NFT_reroll not from owner");
+        _rerollInternal(from_, tokenId_);
     }
 
     // _repopulateChunksInternal is the internal handler for chunk repopulation of a target
@@ -709,7 +733,7 @@ abstract contract SFT418 is ChunkProcessable {
     }
 
     // _repopulateChunks is the internal handler for SFT418Pair repopulateChunks call
-    function _repopulateChunks(address msgSender_) internal virtual {
+    function _NFT_repopulateChunks(address msgSender_) internal virtual {
         // repopulate using uint256(max) amount, which means we repopulate all by default
         _repopulateChunksInternal(
             msgSender_, 
@@ -791,6 +815,10 @@ abstract contract SFT418 is ChunkProcessable {
         }
     }
 
+    function _SFT418Fallback() internal virtual {
+        
+    }
+
     modifier SFT418Fallback() virtual {
         
         // Grab the function selector from the calldata
@@ -824,19 +852,9 @@ abstract contract SFT418 is ChunkProcessable {
         // "_NFT_isApprovedForAll(address,address)" >> "0x69c6952a"
         if (_fnSelector == 0x69c6952a) {
             _requirePair(_pairAddress, msg.sender);
-            
             bool _approved = _NFT_isApprovedForAll(_addrload(0x04), _addrload(0x24));
-
-            // Why doesn't solidity allow bool -> uint conversions o_o
-            // Note: we can just store isApprovedForAll as a uint256 instead of bool
-            // but for readability / familiarity we will do this conversion instead
-            if (_approved) {
-                _fbreturn(1);
-            }
-
-            else {
-                _fbreturn(0);
-            }
+            // sol doesnt allow bool -> uint256 conversion, strangely enough
+            if (_approved) _fbreturn(1); else _fbreturn(0); 
         }
 
         /////////////////////////////////
@@ -865,17 +883,35 @@ abstract contract SFT418 is ChunkProcessable {
             _fbreturn(1);
         }
 
+        // This is the version that does an incremental mint, not a tokenId based one
         // "_NFT_mint(address,uint256)" >> "0x3dd17a5e"
         if (_fnSelector == 0x3dd17a5e) {
-
+            _requirePair(_pairAddress, msg.sender);
+            _mint(_addrload(0x04), (_calldataload(0x24) * CHUNK_SIZE()));
+            _fbreturn(1);
         }
 
         // "_NFT_burn(address,uint256)" >> "0xa2352255"
         if (_fnSelector == 0xa2352255) {
-            
+            _requirePair(_pairAddress, msg.sender);
+            _NFT_burn(_addrload(0x04), _calldataload(0x24));
+            _fbreturn(1);
         }
 
+        // Here, we have special SFT418 chunk manipulation functions
+        // "_NFT_reroll(uint256)" >> "0x9c2be510"
+        if (_fnSelector == 0x9c2be510) {
+            _requirePair(_pairAddress, msg.sender);
+            _NFT_reroll(_addrload(0x04), _calldataload(0x24), _addrload(0x44));
+            _fbreturn(1);
+        }
 
+        // "_NFT_repopulateChunks()" >> "0xf36c9b2a"
+        if (_fnSelector == 0xf36c9b2a) {
+            _requirePair(_pairAddress, msg.sender);
+            _NFT_repopulateChunks(_addrload(0x04));
+            _fbreturn(1);
+        }
 
         _;
     }
@@ -891,5 +927,95 @@ contract SFT418Demo is SFT418 {
         SFT418(name_, symbol_)
     {}
 
+}
+
+/**
+ * SFT418Swap (or SFT418S for short) is a Swappable Marketplace version of SFT418
+ * 
+ * It adds functionality for users to pay a fee (optional) to swap their NFT with a 
+ * different NFT in the TOKEN_POOL
+ * 
+ * It is trustless, and the fee is on-chain, meaning marketplaces cannot undercut it,
+ * allowing a new source of revenue for creators and projects alike, where the target
+ * user is the collector!
+ * 
+ * If SFT418S is enabled, it assumes Ownable, and uses onlyOwner modifiers for authorized
+ * functions.
+ */
+
+// import { Ownable } from "../../access/Ownable.sol";
+
+// abstract contract SFT418Swap is SFT418, Ownable {
+
+//     event SwapRoyaltiesReceiverSet(address indexed operator, address indexed receiver);
+//     event SwapRoyaltiesFeeSet(address indexed operator, uint256 feeInBasisPoints);
+
+//     address public SWAP_ROALYITES_RECEIVER;
+//     address public SWAP_ROYALTIES_FEE;
+
+//     function O_setSwapRoyaltiesReceiver(address receiver_) public virtual onlyOwner {
+//         SWAP_ROALYITES_RECEIVER = receiver_;
+//         emit SwapRoyaltiesReceiverSet(msg.sender, receiver_);
+//     }
+
+// }
+
+abstract contract SFT418Swap is SFT418 {
+
+    function _NFT_swap(uint256 fromId_, uint256 toId_, uint256 fee_, address feeTarget_, 
+    address msgSender_) internal virtual {
+
+        // Make sure the token to be swapped exists
+        address _ownerFrom = chunkToOwners[fromId_].owner;
+        require(_ownerFrom != address(0), "SFT418S: _NFT_swap nonexistent fromToken");
+
+        // Make sure the to-be-swapped-to token is owned by the pool
+        address _ownerTo = chunkToOwners[toId_].owner;
+        require(_ownerTo == TOKEN_POOL, "SFT418S: _NFT_swap toToken not owned by pool");
+
+        // Make sure there's available fees to deduct from the user
+        uint256 _remainderFrom = _balanceOf[_ownerFrom] % CHUNK_SIZE();
+        require(_remainderFrom >= fee_, "SFT418S: _NFT_swap not enough remainder for fees");
+
+        // Transfer the fee to the feeTarget_, if there is one
+        if (fee_ > 0 && feeTarget_ != address(0)) _transfer(msgSender_, feeTarget_, fee_);
+
+        // Swap chunks
+        uint256 _indexFrom = chunkToOwners[fromId_].index;
+        uint256 _indexTo = chunkToOwners[toId_].index;
+
+        chunkToOwners[fromId_] = ChunkInfo(
+            TOKEN_POOL,
+            uint32(_indexTo)
+        );
+
+        chunkToOwners[toId_] = ChunkInfo(
+            _ownerFrom,
+            uint32(_indexFrom)
+        );
+
+        ownerToChunkIndexes[TOKEN_POOL][_indexTo] = uint32(fromId_);
+        ownerToChunkIndexes[_ownerFrom][_indexFrom] = uint32(toId_);
+
+        delete _getApproved[fromId_];
+        delete _getApproved[toId_];
+
+        NFT.emitTransfer(_ownerFrom, TOKEN_POOL, fromId_);
+        NFT.emitTransfer(TOKEN_POOL, _ownerFrom, toId_);
+    }
+
+    modifier SFT418Fallback override(SFT418) {
+        
+
+        _;
+    }
+
+}
+
+contract SFT418SDemo is SFT418Swap {
+    
+    constructor(string memory name_, string memory symbol_) 
+        SFT418(name_, symbol_)
+    {}
 
 }

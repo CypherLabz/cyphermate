@@ -125,8 +125,6 @@ abstract contract ERC404 is Whitelistable {
 
     event ApprovalForAll(address indexed owner, address indexed operator, bool approved);
     event ChunkReordered(address indexed owner, uint256 indexed tokenId, uint256 posFrom, uint256 posTo);
-    event PoolSwapRoyaltiesReceiverSet(address indexed operator, address indexed receiver);
-    event PoolSwapRoyaltiesFeeSet(address indexed operator, uint256 fee_);
 
     /////////////////////////////////
     // Collection Metadata //////////
@@ -992,6 +990,10 @@ abstract contract ERC721TokenReceiver {
 }
 
 abstract contract ERC404PoolSwap is ERC404 {
+
+    // ERC404 poolSwap events
+    event PoolSwapRoyaltiesReceiverSet(address indexed operator, address indexed receiver);
+    event PoolSwapRoyaltiesFeeSet(address indexed operator, uint256 fee_);
 
     // ERC404 poolSwap contract-enforced optional royalties. Default set to 0.
     address public poolSwapRoyaltiesReceiver;

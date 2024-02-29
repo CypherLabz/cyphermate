@@ -38,6 +38,9 @@ interface ISFT418Primary {
 
     function _NFT_mint(address to_, uint256 amount_) external returns (bool);
     function _NFT_burn(address from_, uint256 amount_) external returns (bool);
+
+    function _NFT_reroll(address from_, uint256 tokenId_, address msgSender_) external returns (bool);
+    function _NFT_repopulateChunks(address msgSender_) external returns (bool);
 }
 
 abstract contract SFT418Pair {
@@ -79,7 +82,7 @@ abstract contract SFT418Pair {
     }
 
     /////////////////////////////////
-    // SFT418 Interface Reads ///////
+    // ERC721 Interface Reads ///////
     /////////////////////////////////
 
     function ownerOf(uint256 tokenId_) public virtual view returns (address) {
@@ -99,7 +102,7 @@ abstract contract SFT418Pair {
     }
 
     /////////////////////////////////
-    // SFT418 Interface Writes //////
+    // ERC721 Interface Writes //////
     /////////////////////////////////
 
     function approve(address spender_, uint256 tokenId_) public virtual {
@@ -114,9 +117,9 @@ abstract contract SFT418Pair {
         require(SFT418._NFT_transferFrom(from_, to_, tokenId_));
     }
 
-    /////////////////////////////////
-    // SFT418 Interface Writes //////
-    /////////////////////////////////
+    ////////////////////////////////////////////
+    // ERC721 Interface Writes (Internal) //////
+    ////////////////////////////////////////////
 
     function _mint(address to_, uint256 amount_) internal virtual {
         require(SFT418._NFT_mint(to_, amount_));
@@ -127,7 +130,19 @@ abstract contract SFT418Pair {
     }
 
     /////////////////////////////////
-    // ERC721 Native Functions //////
+    // SFT418 Interface Writes //////
+    /////////////////////////////////
+
+    function reroll(uint256 tokenId_) public virtual {
+        require(SFT418._NFT_reroll(msg.sender, tokenId_, msg.sender));
+    }
+
+    function repopulate() public virtual {
+        require(SFT418._NFT_repopulateChunks(msg.sender));
+    }
+
+    /////////////////////////////////
+    // ERC721-Native Functions //////
     /////////////////////////////////
 
     function _checkOnERC721Received(address from_, address to_, uint256 tokenId_, bytes memory data_) internal virtual {
@@ -167,9 +182,13 @@ abstract contract SFT418Pair {
     /////////////////////////////////
     // Fallback method of communication inspired by DN404 / Solady
 
-    function _calldataload(uint256 offset_) private pure returns (uint256 _value) {
+    function _requirePair(address pair_, address sender_) internal pure {
+        require(pair_ == sender_, "SFT418: fallback() sender is not pair");
+    }
+
+    function _calldataload(uint256 offset_) private pure returns (uint256 _val) {
         assembly {
-            _value := calldataload(offset_)
+            _val := calldataload(offset_)
         }
     }
 
@@ -202,18 +221,16 @@ abstract contract SFT418Pair {
         // FALLBACK PAIR FUNCTIONS
         // "emitTransfers(address,address,uint256[])" >> "0xc9063eae"
         if (l_fnSelector == 0xc9063eae) {
-            require(msg.sender == l_pairAddress, "SFT418Pair: fallback() emitTransfers not from pair");
+            _requirePair(l_pairAddress, msg.sender);
             assembly {
                 let from_ := calldataload(0x04) // load from_ address from first 32 bytes of calldata arguments
                 let to_ := calldataload(0x24)  // load to_ address from second 32 bytes of calldata args
                 let o := add(0x24, calldataload(0x44)) // get the offset of tokenIds_ array
                 let end := add(o, shl(5, calldataload(sub(o, 0x20)))) // get the end of tokenIds_ array
                 for {} iszero(eq(o, end)) { o:= add(0x20, o) } { // yul loop
-                    // emit NFT transfer logs using log4 (3 indexed values)
+                    // emit NFT transfer
                     log4(codesize(), 0x00, _TRANSFER_EVENT_SIGNATURE, from_, to_, calldataload(o))
                 }
-
-                // return true
                 mstore(0x00, 0x01)
                 return(0x00, 0x20)
             }
