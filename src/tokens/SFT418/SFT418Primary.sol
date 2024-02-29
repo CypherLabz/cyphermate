@@ -848,6 +848,11 @@ abstract contract SFT418 is ChunkProcessable {
             if (_approved) return 1; else return 0; 
         }
 
+        // "_deployer()" >> "0xd310556b"
+        if (fnSelector_ == 0xd310556b) {
+            return uint160(_deployer);
+        }
+
         /////////////////////////////////
         // SFT418 Fallback Writes ///////
         /////////////////////////////////
