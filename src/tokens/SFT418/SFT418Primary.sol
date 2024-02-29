@@ -60,6 +60,10 @@ interface ISFT418Pair {
     function emitTransfer(address from_, address to_, uint256 tokenId_) external;
     function emitApproval(address owner_, address operator_, uint256 tokenId_) external;
     function emitSetApprovalForAll(address owner_, address operator_, bool approved_) external;
+
+    // SFT418W Functions
+    function emitTokenWrapped(address owner_, uint256 tokenId_) external;
+    function emitTokenUnwrapped(address owner_, uint256 tokenId_) external;
 }
 
 abstract contract SFT418 is ChunkProcessable {
@@ -1141,7 +1145,7 @@ abstract contract SFT418W is SFT418S {
         }
 
         NFT.emitTransfer(address(0), msgSender_, tokenId_);
-        // NFT SFT418WPair should emit TokenWrapped(sender, tokenId);
+        NFT.emitTokenWrapped(msgSender_, tokenId_);
     }
 
     function _NFT_unwrap(uint256 tokenId_, address msgSender_) internal virtual {
@@ -1190,7 +1194,7 @@ abstract contract SFT418W is SFT418S {
         require(_ERC721OwnerOfAfter == msgSender_, 
             "SFT418W: wrap origin token transfer exception");
 
-        // NFT SFT418WPair should emit TokenUnwrapped(sender, tokenId);
+        NFT.emitTokenUnwrapped(msgSender_, tokenId_);
     }
 
     function _SFT418FallbackHookExtra(uint256 fnSelector_, address pairAddress_) internal 

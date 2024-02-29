@@ -46,6 +46,10 @@ interface ISFT418Primary {
     // SFT418S
     function _NFT_swapUserInitiated(uint256 fromId_, uint256 toId_, uint256 fee_,
     address feeTarget_, address msgSender_) external returns (bool);
+
+    // SFT418W
+    function _NFT_wrap(uint256 tokenId_, address msgSender_) external returns (bool);
+    function _NFT_unwrap(uint256 tokenId_, address msgSender_) external returns (bool);
 }
 
 abstract contract SFT418Pair {
@@ -354,13 +358,31 @@ abstract contract SFT418WPair is SFT418SPair {
     event TokenWrapped(address indexed sender, uint256 indexed tokenId);
     event TokenUnwrapped(address indexed sender, uint256 indexed tokenId);
     
-    // "TokenWrapped(address,uint256)"
-    bytes32 internal constant _TOKEN_WRAPPED_EVENT_SIGNATURE =
-        0x2273a99739c31a37346636a3013c2cedebee7cd5b4c560faded39d298c1dd45c;
-    
-    // "TokenUnwrapped(address,uint256)"
-    bytes32 internal constant _TOKEN_UNWRAPPED_EVENT_SIGNATURE = 
-        0x7f8146ca1ae17ad17561461ef221d97c8160bfddcae0edb68f53ce8dc5ce4af3;
+    function wrap(uint256 tokenId_) public virtual {
+        require(SFT418._NFT_wrap(tokenId_, msg.sender));
+    }
 
-    
+    function unwrap(uint256 tokenId_) public virtual {
+        require(SFT418._NFT_unwrap(tokenId_, msg.sender));
+    }
+
+    function _SFT418FallbackHookExtra(uint256 fnSelector_, address pairAddress_) 
+    internal virtual override(SFT418Pair) returns (uint256) {
+        
+        // "emitTokenWrapped(address,uint256)" >> "0x576fef23"
+        if (fnSelector_ == 0x576fef23) {
+            _requirePair(pairAddress_, msg.sender);
+            emit TokenWrapped(_addrload(0x04), _calldataload(0x24));
+            return 1;
+        }
+
+        // "emitTokenUnwrapped(address,uint256)" >> "0x76352c11"
+        if (fnSelector_ == 0x76352c11) {
+            _requirePair(pairAddress_, msg.sender);
+            emit TokenUnwrapped(_addrload(0x04), _calldataload(0x24));
+            return 1;
+        }
+
+        return 0;
+    }
 }
