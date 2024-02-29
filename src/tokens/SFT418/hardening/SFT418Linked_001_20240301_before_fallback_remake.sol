@@ -313,7 +313,7 @@ contract SFT418PairDemo is SFT418Pair {
 
 }
 
-import { Ownable } from "../../access/Ownable.sol";
+import { Ownable } from "../../../access/Ownable.sol";
 
 abstract contract SFT418SPair is SFT418Pair, Ownable {
 

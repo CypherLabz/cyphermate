@@ -15,6 +15,7 @@ pragma solidity ^0.8.20;
  */
 
 interface ISFT418Pair {
+    function linkSFT418Pair() external;
     function emitTransfers(address from_, address to_, uint256[] memory tokenIds_) external;
     function emitTransfer(address from_, address to_, uint256 tokenId_) external;
     function emitApproval(address owner_, address operator_, uint256 tokenId_) external;
@@ -34,7 +35,7 @@ interface ISFT418Primary {
 
     function _NFT_approve(address spender_, uint256 tokenId_, address msgSender_) external returns (bool);
     function _NFT_setApprovalForAll(address operator_, bool approved_, address msgSender_) external returns (bool);
-    function _NFT_transferFrom(address from_, address to_, uint256 tokenId_) external returns (bool);
+    function _NFT_transferFrom(address from_, address to_, uint256 tokenId_, address msgSender_) external returns (bool);
 
     function _NFT_mint(address to_, uint256 amount_) external returns (bool);
     function _NFT_burn(address from_, uint256 amount_) external returns (bool);
@@ -118,7 +119,7 @@ abstract contract SFT418Pair {
     }
 
     function transferFrom(address from_, address to_, uint256 tokenId_) public virtual {
-        require(SFT418._NFT_transferFrom(from_, to_, tokenId_));
+        require(SFT418._NFT_transferFrom(from_, to_, tokenId_, msg.sender));
     }
 
     ////////////////////////////////////////////
@@ -263,6 +264,8 @@ abstract contract SFT418Pair {
             // emit event
             emit ContractLinked(msg.sender);
         }
+
+        return 0;
     }
 
     function _SFT418FallbackHookExtra(uint256 fnSelector_, address pairAddress_) 
@@ -301,6 +304,17 @@ contract SFT418PairDemo is SFT418Pair {
         return "";
     }
 
+    /////////////////////////////////
+    // Test Functions ///////////////
+    /////////////////////////////////
+
+    function mint(address to_, uint256 amount_) public virtual {
+        _mint(to_, amount_);
+    }
+
+    function burn(address from_, uint256 amount_) public virtual {
+        _burn(from_, amount_);
+    }
 }
 
 import { Ownable } from "../../access/Ownable.sol";

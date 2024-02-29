@@ -95,7 +95,7 @@ abstract contract SFT418 is ChunkProcessable {
         return 10000;
     }
     function CHUNK_SIZE() public virtual returns (uint256) {
-        return 1 ether;
+        return 100 ether;
     }
     function MAX_SUPPLY() public virtual returns (uint256) {
         return TOTAL_CHUNKS() * CHUNK_SIZE();
@@ -168,9 +168,14 @@ abstract contract SFT418 is ChunkProcessable {
     // A REQUIRED initializer for implementation constructor to pair.
     // Incorrect pairing will cause subsequent functions to break entirely.
     function _initializeSFT418Pair(address pair_) internal virtual {
+        require(_deployer == msg.sender, "SFT418: _initializeSFT418Pair not sent from deployer"); 
         require(address(NFT) == address(0), "SFT418: _initializeSFT418Pair already paired");
         NFT = ISFT418Pair(pair_);
         NFT.linkSFT418Pair();
+    }
+
+    function initializeSFT418Pair(address pair_) public {
+        _initializeSFT418Pair(pair_);
     }
 
     /////////////////////////////////
@@ -179,7 +184,7 @@ abstract contract SFT418 is ChunkProcessable {
 
     // _calChunkDiff: (a,b) for sender = (before, after) || receiver = (after, before)
     function _calChunkDiff(uint256 a, uint256 b) internal virtual returns (uint256) {
-        require(a > b, "SFT418: _chunkDiff input value exception"); // Optional require
+        require(a >= b, "SFT418: _chunkDiff input value exception"); // Optional require
         return (a / CHUNK_SIZE()) - (b / CHUNK_SIZE());
     }
 
@@ -483,6 +488,9 @@ abstract contract SFT418 is ChunkProcessable {
     // Native SFT418 minting uses incremental IDs. This only supports amount_, not ID.
     function _mint(address to_, uint256 amount_) internal virtual {
 
+        // We can't mint to address(0)
+        require(to_ != address(0), "SFT418: _mint to zero address");
+
         // Load the starting balance of the receiver for chunk-size comparisons       
         uint256 _startBalTo = balanceOf(to_);
 
@@ -517,6 +525,10 @@ abstract contract SFT418 is ChunkProcessable {
 
     // _burn function using amount_ as an input
     function _burn(address from_, uint256 amount_) internal virtual {
+
+        // We don't burn from zero address
+        require(from_ != address(0), "SFT418: _burn from zero address");
+
         // Get the starting balance for chunkDiff comparisons
         uint256 _startBalFrom = balanceOf(from_);
 
@@ -565,18 +577,6 @@ abstract contract SFT418 is ChunkProcessable {
         allowance[msg.sender][operator_] = amount_;
         emit Approval(msg.sender, operator_, amount_);
         return true;
-    }
-
-    /////////////////////////////////
-    // Test Functions ///////////////
-    /////////////////////////////////
-
-    function mint(address to_, uint256 amount_) public virtual {
-        _mint(to_, amount_);
-    }
-
-    function burn(address from_, uint256 amount_) public virtual {
-        _burn(from_, amount_);
     }
 
     /////////////////////////////////
@@ -857,9 +857,8 @@ abstract contract SFT418 is ChunkProcessable {
         // SFT418 Fallback Writes ///////
         /////////////////////////////////
 
-        // "_NFT_approve(address,uint256)" >> "0x58fd2105"
-        // msg.sender can be gotten from the next 32-byte word after calldata
-        if (fnSelector_ == 0x58fd2105) {
+        // "_NFT_approve(address,uint256,address)" >> "0x2623a11b"
+        if (fnSelector_ == 0x2623a11b) {
             _requirePair(pairAddress_, msg.sender);
             _NFT_approve(_addrload(0x04), _calldataload(0x24), _addrload(0x44));
             return 1;
@@ -872,8 +871,8 @@ abstract contract SFT418 is ChunkProcessable {
             return 1;
         }
 
-        // "_NFT_transferFrom(address,address,uint256)" >> "0x221d61cf"
-        if (fnSelector_ == 0x221d61cf) {
+        // "_NFT_transferFrom(address,address,uint256,address)" >> "0xf62ddccf"
+        if (fnSelector_ == 0xf62ddccf) {
             _requirePair(pairAddress_, msg.sender);
             _NFT_transferFrom(_addrload(0x04), _addrload(0x24), _calldataload(0x44), _addrload(0x64));
             return 1;
@@ -935,6 +934,18 @@ contract SFT418Demo is SFT418 {
     constructor(string memory name_, string memory symbol_) 
         SFT418(name_, symbol_)
     {}
+
+    /////////////////////////////////
+    // Test Functions ///////////////
+    /////////////////////////////////
+
+    function mint(address to_, uint256 amount_) public virtual {
+        _mint(to_, amount_);
+    }
+
+    function burn(address from_, uint256 amount_) public virtual {
+        _burn(from_, amount_);
+    }
 
 }
 
@@ -1048,6 +1059,18 @@ contract SFT418SDemo is SFT418S {
     constructor(string memory name_, string memory symbol_) 
         SFT418(name_, symbol_)
     {}
+
+    /////////////////////////////////
+    // Test Functions ///////////////
+    /////////////////////////////////
+
+    function mint(address to_, uint256 amount_) public virtual {
+        _mint(to_, amount_);
+    }
+
+    function burn(address from_, uint256 amount_) public virtual {
+        _burn(from_, amount_);
+    }
 
 }
 
