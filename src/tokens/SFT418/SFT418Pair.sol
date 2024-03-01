@@ -94,6 +94,14 @@ abstract contract SFT418Pair {
     // ERC721 Interface Reads ///////
     /////////////////////////////////
 
+    function name() public virtual view returns (string memory) {
+        return SFT418.name();
+    }
+
+    function symbol() public virtual view returns (string memory) {
+        return SFT418.symbol();
+    }
+
     function ownerOf(uint256 tokenId_) public virtual view returns (address) {
         return SFT418._NFT_ownerOf(tokenId_);
     }
@@ -157,7 +165,7 @@ abstract contract SFT418Pair {
     function _checkOnERC721Received(address from_, address to_, uint256 tokenId_, bytes memory data_) internal virtual {
         require(
             to_.code.length == 0 ||
-                ERC721TokenReceiver(to_).onERC721Received(from_, to_, tokenId_, data_) ==
+                ERC721TokenReceiver(to_).onERC721Received(msg.sender, from_, tokenId_, data_) ==
                 ERC721TokenReceiver.onERC721Received.selector,
             "SFT418: _checkOnERC721Received not ERC721 receiver"
         );
@@ -318,6 +326,45 @@ contract SFT418PairDemo is SFT418Pair {
 
     function burn(address from_, uint256 amount_) public virtual {
         _burn(from_, amount_);
+    }
+
+    function burn(uint256 tokenId_) public virtual {
+        address _owner = ownerOf(tokenId_);
+        _burn(_owner, tokenId_);
+    }
+
+    function _safeMint(address to, uint256 id) internal virtual {
+        _mint(to, id);
+
+        require(
+            to.code.length == 0 ||
+                ERC721TokenReceiver(to).onERC721Received(msg.sender, address(0), id, "") ==
+                ERC721TokenReceiver.onERC721Received.selector,
+            "UNSAFE_RECIPIENT"
+        );
+    }
+
+    function _safeMint(
+        address to,
+        uint256 id,
+        bytes memory data
+    ) internal virtual {
+        _mint(to, id);
+
+        require(
+            to.code.length == 0 ||
+                ERC721TokenReceiver(to).onERC721Received(msg.sender, address(0), id, data) ==
+                ERC721TokenReceiver.onERC721Received.selector,
+            "UNSAFE_RECIPIENT"
+        );
+    }
+
+    function safeMint(address to, uint256 id) public virtual {
+        _safeMint(to, id);
+    }
+
+    function safeMint(address to, uint256 id, bytes memory data) public virtual {
+        _safeMint(to, id, data);
     }
 }
 

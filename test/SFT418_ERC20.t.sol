@@ -8,7 +8,7 @@ import { SFT418PairDemo } from "cyphermate/tokens/SFT418/SFT418Pair.sol";
 import { DSTestPlus } from "solmate/test/utils/DSTestPlus.sol";
 import { DSInvariantTest } from "solmate/test/utils/DSInvariantTest.sol";
 
-contract SFT418Test is DSTestPlus {
+contract SFT418TestERC20 is DSTestPlus {
 
     SFT418Demo      private token;
     SFT418PairDemo  private p;
@@ -18,7 +18,7 @@ contract SFT418Test is DSTestPlus {
     address private c;
 
     function setUp() public {
-        hevm.startPrank(a);
+        // hevm.startPrank(a);
 
         p = new SFT418PairDemo();
         token = new SFT418Demo("Token", "TKN");
@@ -30,7 +30,7 @@ contract SFT418Test is DSTestPlus {
         c = address(3);
 
         token.toggleChunkProcessing();
-        hevm.stopPrank();
+        // hevm.stopPrank();
     }
 
     function invariantMetadata() public {
@@ -142,6 +142,9 @@ contract SFT418Test is DSTestPlus {
 
     function testMint(address from, uint256 amount) public {
 
+        if (from == address(0)) from = address(0xb00f);
+        if (amount > token.MAX_SUPPLY()) amount = token.MAX_SUPPLY();
+
         token.toggleChunkProcessing();
 
         // // no address(0) mint and burn
@@ -166,6 +169,10 @@ contract SFT418Test is DSTestPlus {
         uint256 burnAmount
     ) public {
         
+        if (from == address(0)) from = address(0xb00f);
+        if (mintAmount > token.MAX_SUPPLY()) mintAmount = token.MAX_SUPPLY();
+        if (burnAmount > token.MAX_SUPPLY()) burnAmount = token.MAX_SUPPLY();
+
         token.toggleChunkProcessing();
 
         burnAmount = bound(burnAmount, 0, mintAmount);
@@ -204,7 +211,10 @@ contract SFT418Test is DSTestPlus {
     }
 
     function testTransfer(address from, uint256 amount) public {
-        
+
+        if (from == address(0)) from = address(0xb00f);
+        if (amount > token.MAX_SUPPLY()) amount = token.MAX_SUPPLY();
+
         token.toggleChunkProcessing();
 
         // // mintAmount above MAX_SUPPLY()
@@ -235,7 +245,11 @@ contract SFT418Test is DSTestPlus {
         uint256 approval,
         uint256 amount
     ) public {
-        
+
+        if (to == address(0)) to = address(0xb00f);
+        if (approval > token.MAX_SUPPLY()) approval = token.MAX_SUPPLY();
+        if (amount > token.MAX_SUPPLY()) amount = token.MAX_SUPPLY();
+
         token.toggleChunkProcessing();
 
         amount = bound(amount, 0, approval);

@@ -620,25 +620,26 @@ abstract contract SFT418 is ChunkProcessable {
         NFT.emitSetApprovalForAll(msgSender_, operator_, approved_);
     }
 
-    function _NFT_ownerOf(uint256 tokenId_) internal view returns (address) {
+    function _NFT_ownerOf(uint256 tokenId_) internal virtual view returns (address) {
         address _owner = chunkToOwners[tokenId_].owner;
         require(_owner != address(0), "SFT418: _NFT_ownerOf nonexistent token");
         return _owner;
     }
 
-    function _NFT_balanceOf(address wallet_) internal view returns (uint256) {
+    function _NFT_balanceOf(address wallet_) internal virtual view returns (uint256) {
+        require(wallet_ != address(0), "SFT418: _NFT_balanceOf inqury to zero address");
         return ownerToActiveLength[wallet_];
     }
 
-    function _NFT_getApproved(uint256 tokenId_) internal view returns (address) {
+    function _NFT_getApproved(uint256 tokenId_) internal virtual view returns (address) {
         return _getApproved[tokenId_];
     }
 
-    function _NFT_isApprovedForAll(address owner_, address operator_) internal view returns (bool) {
+    function _NFT_isApprovedForAll(address owner_, address operator_) internal virtual view returns (bool) {
         return _isApprovedForAll[owner_][operator_];
     }
 
-    function _NFT_burn(address from_, uint256 tokenId_) internal {
+    function _NFT_burn(address from_, uint256 tokenId_) internal virtual {
         address _owner = chunkToOwners[tokenId_].owner;
 
         require(_owner != address(0), "SFT418: _NFT_burn nonexistent token");
@@ -654,14 +655,14 @@ abstract contract SFT418 is ChunkProcessable {
         emit Transfer(from_, address(0), CHUNK_SIZE());
 
         // Now, do a _NFTTransfer which transfers only the NFT. We pool the NFT, not burn.
-        _NFTTransfer(from_, TOKEN_POOL, tokenId_);
+        _NFTTransfer(from_, address(0), tokenId_);
     }
 
-    function _getChunkInfo(uint256 tokenId_) internal view returns (ChunkInfo memory) {
+    function _getChunkInfo(uint256 tokenId_) internal virtual view returns (ChunkInfo memory) {
         return chunkToOwners[tokenId_];
     }
 
-    function _viewAllChunkIndexes(address wallet_) internal view returns (uint32[] memory) {
+    function _viewAllChunkIndexes(address wallet_) internal virtual view returns (uint32[] memory) {
         return ownerToChunkIndexes[wallet_];
     }
 
@@ -868,8 +869,8 @@ abstract contract SFT418 is ChunkProcessable {
             return 1;
         }
 
-        // "_NFT_setApprovalForAll(address,bool)" >> "0x0a60edd1"
-        if (fnSelector_ == 0x0a60edd1) {
+        //  "_NFT_setApprovalForAll(address,bool,address)" >> "0xc8ab1232"
+        if (fnSelector_ == 0xc8ab1232) {
             _requirePair(pairAddress_, msg.sender);
             _NFT_setApprovalForAll(_addrload(0x04), (_calldataload(0x24) != 0), _addrload(0x44));
             return 1;
@@ -951,6 +952,14 @@ contract SFT418Demo is SFT418 {
         _burn(from_, amount_);
     }
 
+    function _isChunkProcessor(address) internal virtual override(ChunkProcessable) pure returns (bool) {
+        return true;
+    }
+    
+    function TOTAL_CHUNKS() public virtual override(SFT418) returns (uint256) {
+        return 1337;
+    }
+    
 }
 
 /**
