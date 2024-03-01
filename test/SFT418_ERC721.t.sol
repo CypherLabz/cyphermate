@@ -416,7 +416,7 @@ contract SFT418TestERC721 is DSTestPlus {
 
     function testMint(address to, uint256 id) public {
         if (to == address(0)) to = address(0xBEEF);
-        if (id > token.TOTAL_CHUNKS()) id = token.TOTAL_CHUNKS();
+        if (id > token.MAX_CHUNKS()) id = token.MAX_CHUNKS();
         if (id == 0) id = 1;
 
         pToken.mint(to, id);
@@ -427,7 +427,7 @@ contract SFT418TestERC721 is DSTestPlus {
 
     function testBurn(address to, uint256 id) public {
         if (to == address(0)) to = address(0xBEEF);
-        if (id > token.TOTAL_CHUNKS()) id = token.TOTAL_CHUNKS();
+        if (id > token.MAX_CHUNKS()) id = token.MAX_CHUNKS();
         if (id == 0) id = 1;
 
         pToken.mint(to, id);
@@ -445,7 +445,7 @@ contract SFT418TestERC721 is DSTestPlus {
 
     function testApprove(address to, uint256 id) public {
         if (to == address(0)) to = address(0xBEEF);
-        if (id > token.TOTAL_CHUNKS()) id = token.TOTAL_CHUNKS();
+        if (id > token.MAX_CHUNKS()) id = token.MAX_CHUNKS();
         if (id == 0) id = 1;
 
         pToken.mint(address(this), id);
@@ -456,7 +456,7 @@ contract SFT418TestERC721 is DSTestPlus {
     }
 
     function testApproveBurn(address to, uint256 id) public {
-        if (id > token.TOTAL_CHUNKS()) id = token.TOTAL_CHUNKS();
+        if (id > token.MAX_CHUNKS()) id = token.MAX_CHUNKS();
         if (id == 0) id = 1;
         
         pToken.mint(address(this), id);
@@ -481,7 +481,7 @@ contract SFT418TestERC721 is DSTestPlus {
     }
 
     function testTransferFrom(uint256 id, address to) public {
-        if (id > token.TOTAL_CHUNKS()) id = token.TOTAL_CHUNKS();
+        if (id > token.MAX_CHUNKS()) id = token.MAX_CHUNKS();
         if (id == 0) id = 1;
         
         address from = address(0xABCD);
@@ -502,7 +502,7 @@ contract SFT418TestERC721 is DSTestPlus {
     }
 
     function testTransferFromSelf(uint256 id, address to) public {
-        if (id > token.TOTAL_CHUNKS()) id = token.TOTAL_CHUNKS();
+        if (id > token.MAX_CHUNKS()) id = token.MAX_CHUNKS();
         if (id == 0) id = 1;
         
         if (to == address(0) || to == address(this)) to = address(0xBEEF);
@@ -518,7 +518,7 @@ contract SFT418TestERC721 is DSTestPlus {
     }
 
     function testTransferFromApproveAll(uint256 id, address to) public {
-        if (id > token.TOTAL_CHUNKS()) id = token.TOTAL_CHUNKS();
+        if (id > token.MAX_CHUNKS()) id = token.MAX_CHUNKS();
         if (id == 0) id = 1;
         
         address from = address(0xABCD);
@@ -539,7 +539,7 @@ contract SFT418TestERC721 is DSTestPlus {
     }
 
     function testSafeTransferFromToEOA(uint256 id, address to) public {
-        if (id > token.TOTAL_CHUNKS()) id = token.TOTAL_CHUNKS();
+        if (id > token.MAX_CHUNKS()) id = token.MAX_CHUNKS();
         if (id == 0) id = 1;
         
         address from = address(0xABCD);
@@ -562,7 +562,7 @@ contract SFT418TestERC721 is DSTestPlus {
     }
 
     function testSafeTransferFromToERC721Recipient(uint256 id) public {
-        if (id > token.TOTAL_CHUNKS()) id = token.TOTAL_CHUNKS();
+        if (id > token.MAX_CHUNKS()) id = token.MAX_CHUNKS();
         if (id == 0) id = 1;
 
         address from = address(0xABCD);
@@ -588,7 +588,7 @@ contract SFT418TestERC721 is DSTestPlus {
     }
 
     function testSafeTransferFromToERC721RecipientWithData(uint256 id, bytes calldata data) public {
-        if (id > token.TOTAL_CHUNKS()) id = token.TOTAL_CHUNKS();
+        if (id > token.MAX_CHUNKS()) id = token.MAX_CHUNKS();
         if (id == 0) id = 1;
 
         address from = address(0xABCD);
@@ -613,7 +613,7 @@ contract SFT418TestERC721 is DSTestPlus {
     }
 
     function testSafeMintToEOA(uint256 id, address to) public {
-        if (id > token.TOTAL_CHUNKS()) id = token.TOTAL_CHUNKS();
+        if (id > token.MAX_CHUNKS()) id = token.MAX_CHUNKS();
         if (id == 0) id = 1;
 
         if (to == address(0)) to = address(0xBEEF);
@@ -627,7 +627,7 @@ contract SFT418TestERC721 is DSTestPlus {
     }
 
     function testSafeMintToERC721Recipient(uint256 id) public {
-        if (id > token.TOTAL_CHUNKS()) id = token.TOTAL_CHUNKS();
+        if (id > token.MAX_CHUNKS()) id = token.MAX_CHUNKS();
         if (id == 0) id = 1;
 
         ERC721Recipient to = new ERC721Recipient();
@@ -644,7 +644,7 @@ contract SFT418TestERC721 is DSTestPlus {
     }
 
     function testSafeMintToERC721RecipientWithData(uint256 id, bytes calldata data) public {
-        if (id > token.TOTAL_CHUNKS()) id = token.TOTAL_CHUNKS();
+        if (id > token.MAX_CHUNKS()) id = token.MAX_CHUNKS();
         if (id == 0) id = 1;
 
         ERC721Recipient to = new ERC721Recipient();
@@ -715,7 +715,7 @@ contract SFT418TestERC721 is DSTestPlus {
         address to,
         uint256 id
     ) public {
-        if (id > token.TOTAL_CHUNKS()) id = token.TOTAL_CHUNKS();
+        if (id > token.MAX_CHUNKS()) id = token.MAX_CHUNKS();
         if (id == 0) id = 1;
 
         if (owner == address(0)) to = address(0xBEEF);
@@ -727,7 +727,7 @@ contract SFT418TestERC721 is DSTestPlus {
     }
 
     function testFailTransferFromToZero(uint256 id) public {
-        if (id > token.TOTAL_CHUNKS()) id = token.TOTAL_CHUNKS();
+        if (id > token.MAX_CHUNKS()) id = token.MAX_CHUNKS();
         if (id == 0) id = 1;
 
         pToken.mint(address(this), id);
@@ -741,7 +741,7 @@ contract SFT418TestERC721 is DSTestPlus {
         uint256 id
     ) public {
         if (from == address(this)) from = address(0xBEEF);
-        if (id > token.TOTAL_CHUNKS()) id = token.TOTAL_CHUNKS();
+        if (id > token.MAX_CHUNKS()) id = token.MAX_CHUNKS();
         if (id == 0) id = 1;
 
         pToken.mint(from, id);
@@ -750,7 +750,7 @@ contract SFT418TestERC721 is DSTestPlus {
     }
 
     function testFailSafeTransferFromToNonERC721Recipient(uint256 id) public {
-        if (id > token.TOTAL_CHUNKS()) id = token.TOTAL_CHUNKS();
+        if (id > token.MAX_CHUNKS()) id = token.MAX_CHUNKS();
         if (id == 0) id = 1;
 
         pToken.mint(address(this), id);
@@ -759,7 +759,7 @@ contract SFT418TestERC721 is DSTestPlus {
     }
 
     function testFailSafeTransferFromToNonERC721RecipientWithData(uint256 id, bytes calldata data) public {
-        if (id > token.TOTAL_CHUNKS()) id = token.TOTAL_CHUNKS();
+        if (id > token.MAX_CHUNKS()) id = token.MAX_CHUNKS();
         if (id == 0) id = 1;
 
         pToken.mint(address(this), id);
@@ -768,7 +768,7 @@ contract SFT418TestERC721 is DSTestPlus {
     }
 
     function testFailSafeTransferFromToRevertingERC721Recipient(uint256 id) public {
-        if (id > token.TOTAL_CHUNKS()) id = token.TOTAL_CHUNKS();
+        if (id > token.MAX_CHUNKS()) id = token.MAX_CHUNKS();
         if (id == 0) id = 1;
 
         pToken.mint(address(this), id);
@@ -777,7 +777,7 @@ contract SFT418TestERC721 is DSTestPlus {
     }
 
     function testFailSafeTransferFromToRevertingERC721RecipientWithData(uint256 id, bytes calldata data) public {
-        if (id > token.TOTAL_CHUNKS()) id = token.TOTAL_CHUNKS();
+        if (id > token.MAX_CHUNKS()) id = token.MAX_CHUNKS();
         if (id == 0) id = 1;
 
         pToken.mint(address(this), id);
@@ -786,7 +786,7 @@ contract SFT418TestERC721 is DSTestPlus {
     }
 
     function testFailSafeTransferFromToERC721RecipientWithWrongReturnData(uint256 id) public {
-        if (id > token.TOTAL_CHUNKS()) id = token.TOTAL_CHUNKS();
+        if (id > token.MAX_CHUNKS()) id = token.MAX_CHUNKS();
         if (id == 0) id = 1;
 
         pToken.mint(address(this), id);
@@ -797,7 +797,7 @@ contract SFT418TestERC721 is DSTestPlus {
     function testFailSafeTransferFromToERC721RecipientWithWrongReturnDataWithData(uint256 id, bytes calldata data)
         public
     {
-        if (id > token.TOTAL_CHUNKS()) id = token.TOTAL_CHUNKS();
+        if (id > token.MAX_CHUNKS()) id = token.MAX_CHUNKS();
         if (id == 0) id = 1;
         
         pToken.mint(address(this), id);
