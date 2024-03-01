@@ -29,7 +29,7 @@ abstract contract ChunkProcessable {
     mapping(address => bool) internal chunkToggle;
 
     // Contract: default(off), toggled(on) || EOA: default(on), toggled(off)
-    function _isChunkProcessor(address target_) internal virtual view returns (bool) {
+    function isChunkProcessor(address target_) public virtual view returns (bool) {
         return target_.code.length == 0 ? !chunkToggle[target_] : chunkToggle[target_];
     }
 
@@ -95,14 +95,14 @@ abstract contract SFT418 is ChunkProcessable {
     function decimals() public virtual returns (uint8) { 
         return 18; 
     }
-    function TOTAL_CHUNKS() public virtual returns (uint256) {
+    function MAX_CHUNKS() public virtual returns (uint256) {
         return 10000;
     }
     function CHUNK_SIZE() public virtual returns (uint256) {
         return 100 ether;
     }
     function MAX_SUPPLY() public virtual returns (uint256) {
-        return TOTAL_CHUNKS() * CHUNK_SIZE();
+        return MAX_CHUNKS() * CHUNK_SIZE();
     }
 
     // TOKEN_POOL is the phantom address of the token pool. 418POOL in leetspeak.
@@ -271,7 +271,7 @@ abstract contract SFT418 is ChunkProcessable {
             uint256 _mintedTokens = mintedTokens;
 
             // Determine if we are minting or redeeming
-            if (TOTAL_CHUNKS() > _mintedTokens) {
+            if (MAX_CHUNKS() > _mintedTokens) {
                 // Mint a new token ~~~
                 uint256 _nextId = _nextTokenId();            
                 
@@ -420,7 +420,7 @@ abstract contract SFT418 is ChunkProcessable {
         _ERC20Transfer(from_, to_, amount_);
 
         if (ownerToActiveLength[from_] > 0 && // From must have chunks
-            _isChunkProcessor(to_)) // To must receive chunks
+            isChunkProcessor(to_)) // To must receive chunks
         {
             // If so, we can simply swap the slots
             uint256 _chunkDiffFrom = _calChunkDiff(_startBalFrom, balanceOf(from_));
@@ -467,7 +467,7 @@ abstract contract SFT418 is ChunkProcessable {
         }
 
         // If receiver is a chunk processor and there is a chunkDiff, he redeems a token
-        if (_isChunkProcessor(to_)) {
+        if (isChunkProcessor(to_)) {
             uint256 _chunkDiff = _calChunkDiff(balanceOf(to_), _startBalTo);
             _NFTMintOrRedeem(to_, _chunkDiff);
         }
@@ -513,7 +513,7 @@ abstract contract SFT418 is ChunkProcessable {
         emit Transfer(address(0), to_, amount_);
 
         // SFT418: ChunkProcessor Check and then Mint Chunks
-        if (_isChunkProcessor(to_)) {
+        if (isChunkProcessor(to_)) {
 
             // Calculate chunk differences and run ERC721 minting loop
             uint256 _chunkDiff = _calChunkDiff(balanceOf(to_), _startBalTo);
@@ -639,6 +639,7 @@ abstract contract SFT418 is ChunkProcessable {
         return _isApprovedForAll[owner_][operator_];
     }
 
+    // 0xinu: check this, wrap your head around this... pool or address zero?
     function _NFT_burn(address from_, uint256 tokenId_) internal virtual {
         address _owner = chunkToOwners[tokenId_].owner;
 
@@ -899,11 +900,11 @@ contract SFT418Demo is SFT418 {
         _burn(from_, amount_);
     }
 
-    function _isChunkProcessor(address) internal virtual override(ChunkProcessable) pure returns (bool) {
+    function isChunkProcessor(address) public virtual override(ChunkProcessable) pure returns (bool) {
         return true;
     }
     
-    function TOTAL_CHUNKS() public virtual override(SFT418) returns (uint256) {
+    function MAX_CHUNKS() public virtual override(SFT418) returns (uint256) {
         return 1337;
     }
     
@@ -1059,8 +1060,8 @@ abstract contract SFT418W is SFT418S {
     function _mint(address, uint256) internal pure override(SFT418) {}
     function _burn(address, uint256) internal pure override(SFT418) {}
 
-    // Override TOTAL_CHUNKS because total is now equal to wrapped. This is very important.
-    function TOTAL_CHUNKS() public virtual override(SFT418) returns (uint256) {
+    // Override MAX_CHUNKS because total is now equal to wrapped. This is very important.
+    function MAX_CHUNKS() public virtual override(SFT418) returns (uint256) {
         return mintedTokens;
     }
 
