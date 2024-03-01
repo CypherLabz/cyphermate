@@ -746,59 +746,6 @@ abstract contract SFT418 is ChunkProcessable {
         );
     }
 
-    
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    // left to do: erc721 connections
-    // optional erc20 magic stuff
-
-    // fallback functions for contract-pair internal interactions
-    // fallback inspired by DN404. Extremely clever and optimized interactions implementation!
-
-    // error NotPair();
-
     function _requirePair(address pair_, address sender_) internal pure {
         require(pair_ == sender_, "SFT418: fallback() sender is not pair");
     }
