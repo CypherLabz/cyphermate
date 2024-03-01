@@ -89,3 +89,19 @@ abstract contract ERC20 {
         return true;
     }
 }
+
+contract ERC20Demo is ERC20 {
+
+    constructor(string memory name_, string memory symbol_) 
+        ERC20(name_, symbol_)
+    {}
+
+    function mint(address to_, uint256 amount_) public virtual {
+        _mint(to_, amount_);
+    }
+
+    function burn(address from_, uint256 amount_) public virtual {
+        _burn(from_, amount_);
+    }
+
+}
