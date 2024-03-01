@@ -1,4 +1,4 @@
-// SDPX-License-Identifier: MIT
+// SPDX-License-Identifier: MIT
 // Last update: 2024-02-20
 pragma solidity ^0.8.20;
 
