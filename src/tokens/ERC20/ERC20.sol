@@ -27,6 +27,8 @@ abstract contract ERC20 {
     mapping(address => mapping(address => uint256)) public allowance;
 
     function _mint(address to_, uint256 amount_) internal virtual {
+        require(to_ != address(0), "ERC20: _mint to zero");
+
         totalSupply += amount_;
         
         // Cannot overflow because the sum of all user
@@ -39,6 +41,8 @@ abstract contract ERC20 {
     }
 
     function _burn(address from_, uint256 amount_) internal virtual {
+        require(from_ != address(0), "ERC20: _burn from zero");
+
         balanceOf[from_] -= amount_;
         
         // Cannot underflow because a user's balance
