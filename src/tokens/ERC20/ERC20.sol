@@ -75,10 +75,16 @@ abstract contract ERC20 {
             allowance[from_][operator_] -= amount_; // underflow-as-require
         }
     }
+
+    // audit this
+    function _approve(address owner_, address spender_, uint256 amount_) internal virtual {
+        allowance[owner_][spender_] = amount_;
+        emit Approval(owner_, spender_, amount_);
+    }
     
-    function approve(address spender_, uint256 amount_) public virtual returns (bool) {
-        allowance[msg.sender][spender_] = amount_;
-        emit Approval(msg.sender, spender_, amount_);
+    // audit this
+    function approve(address spender_, uint256 amount_) public virtual returns (bool) { 
+        _approve(msg.sender, spender_, amount_);
         return true;
     }
 
@@ -92,20 +98,4 @@ abstract contract ERC20 {
         _transfer(from_, to_, amount_);
         return true;
     }
-}
-
-contract ERC20Demo is ERC20 {
-
-    constructor(string memory name_, string memory symbol_) 
-        ERC20(name_, symbol_)
-    {}
-
-    function mint(address to_, uint256 amount_) public virtual {
-        _mint(to_, amount_);
-    }
-
-    function burn(address from_, uint256 amount_) public virtual {
-        _burn(from_, amount_);
-    }
-
 }
