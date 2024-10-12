@@ -76,13 +76,11 @@ abstract contract ERC20 {
         }
     }
 
-    // audit this
     function _approve(address owner_, address spender_, uint256 amount_) internal virtual {
         allowance[owner_][spender_] = amount_;
         emit Approval(owner_, spender_, amount_);
     }
     
-    // audit this
     function approve(address spender_, uint256 amount_) public virtual returns (bool) { 
         _approve(msg.sender, spender_, amount_);
         return true;
