@@ -28,9 +28,7 @@ abstract contract Ownable2Step is Ownable {
         Ownable2Step._transferOwnership(msg.sender);
     }
 
-    // renounceOwnership() is made payable with a small ether requirement
-    // to prevent accidental renounces
-    function renounceOwnership() public payable virtual override(Ownable) onlyOwner {
+    function renounceOwnership() public virtual override(Ownable) onlyOwner {
         delete pendingOwner;
         Ownable.renounceOwnership();
     }
