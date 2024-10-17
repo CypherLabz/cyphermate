@@ -19,9 +19,8 @@ abstract contract Blocklistable {
         return _blocklisted[wallet_];
     }
 
-    modifier notBlocklisted(address from_, address to_) {
-        require(!_blocklisted[from_], "FROM_BLOCKLISTED");
-        require(!_blocklisted[to_], "TO_BLOCKLISTED");
+    modifier notBlocklisted(address wallet_) {
+        require(!_blocklisted[wallet_], "WALLET_BLOCKLISTED");
         _;
     }
 
