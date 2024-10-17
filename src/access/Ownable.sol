@@ -29,10 +29,7 @@ abstract contract Ownable {
         _transferOwnership(newOwner_);
     }
 
-    // renounceOwnership() is made payable with a small ether requirement
-    // to prevent accidental renounces
-    function renounceOwnership() public payable virtual onlyOwner {
-        require(msg.value == 0.000000000000000173 ether);
+    function renounceOwnership() public virtual onlyOwner {
         _transferOwnership(address(0));
     }
 }
