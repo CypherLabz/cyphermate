@@ -32,11 +32,13 @@ contract TimelockAdmin {
 
 }
 
+// TODO: add timelock features
 contract Timelock is TimelockAdmin {
 
     // Events
     event TransactionQueued(address indexed operator, bytes32 indexed txHash, address indexed target, uint256 value, bytes data, uint256 executeTimestamp);
     event TransactionCancelled(address indexed operator, bytes32 indexed txHash);
+    event TransactionExecuted(address indexed operator, bytes32 indexed txHash, address indexed target, uint256 value, bytes data, uint256 executeTimestamp, bytes returnData);
 
     // Constructor
     constructor(address admin_) 
@@ -83,15 +85,37 @@ contract Timelock is TimelockAdmin {
     }
 
     // Execute a Transaction
-    function executeTransaction(address target_, uint256 value_, bytes memory data_, uint256 executeTimestamp_) public onlyAdmin {
-        
+    function executeTransaction(address target_, uint256 value_, bytes memory data_, uint256 executeTimestamp_) public payable onlyAdmin returns (bytes memory) {
 
+        // Calculate the txHash
+        bytes32 _txHash = keccak256(abi.encode(
+            target_,
+            value_,
+            data_,
+            executeTimestamp_
+        ));
+
+        // Make sure the txHash has been queued
+        require(queuedTxes[_txHash] = true, 
+            "Timelock::executeTransaction: TX_NOT_QUEUED");
+
+        // Make sure that the msg.value exactly matches value_ to send
+        require(value_ == msg.value,
+            "Timelock::executeTransaction: INCORRECT_VALUE");
+
+        // Consume the queued TX
+        queuedTxes[_txHash] = false;
+
+        // Execute the TX
+        (bool success, bytes memory returnData) = target_.call{value: value_}(data_);
+        require(success, "Timelock::executeTransaction: TX_REVERTED");
+
+        // Emit a TransactionExecuted event
+        emit TransactionExecuted(msg.sender, _txHash, target_, value_, data_, executeTimestamp_, returnData);
+
+        // Return the returnData
+        return returnData;
     }
-
-
-
-
-
 
     // So that accounts can send msg.value to the Timelock
     receive() external payable {}
