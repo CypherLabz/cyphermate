@@ -1,9 +1,25 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity 0.8.20;
+pragma solidity ^0.8.20;
 
 import {DSTestPlus} from "solmate/test/utils/DSTestPlus.sol";
 import {DSInvariantTest} from "solmate/test/utils/DSInvariantTest.sol";
-import {ERC20Demo} from "cyphermate/tokens/ERC20/ERC20.sol";
+import {ERC20} from "cyphermate/tokens/ERC20/ERC20.sol";
+
+contract ERC20Demo is ERC20 {
+
+    constructor(string memory name_, string memory symbol_) 
+        ERC20(name_, symbol_)
+    {}
+
+    function mint(address to_, uint256 amount_) public virtual {
+        _mint(to_, amount_);
+    }
+
+    function burn(address from_, uint256 amount_) public virtual {
+        _burn(from_, amount_);
+    }
+
+}
 
 contract ERC20Test is DSTestPlus {
     ERC20Demo token;

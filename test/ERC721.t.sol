@@ -3,7 +3,52 @@ pragma solidity ^0.8.20;
 
 import {DSTestPlus} from "solmate/test/utils/DSTestPlus.sol";
 import {DSInvariantTest} from "solmate/test/utils/DSInvariantTest.sol";
-import {ERC721Demo, ERC721TokenReceiver} from "cyphermate/tokens/ERC721/ERC721.sol";
+import {ERC721, ERC721TokenReceiver} from "cyphermate/tokens/ERC721/ERC721.sol";
+
+contract ERC721Demo is ERC721 {
+
+    constructor(string memory name_, string memory symbol_) 
+        ERC721(name_, symbol_)
+    {}
+
+    function tokenURI(uint256) public pure override(ERC721) returns (string memory) {
+        return "";
+    }
+
+    function mint(address to_, uint256 id_) public virtual {
+        _mint(to_, id_);
+    }
+
+    function burn(uint256 id_) public virtual {
+        _burn(id_);
+    }
+
+    function safeMint(address to, uint256 id) public virtual {
+        _mint(to, id);
+
+        require(
+            to.code.length == 0 ||
+                ERC721TokenReceiver(to).onERC721Received(msg.sender, address(0), id, "") ==
+                ERC721TokenReceiver.onERC721Received.selector,
+            "UNSAFE_RECIPIENT"
+        );
+    }
+
+    function safeMint(
+        address to,
+        uint256 id,
+        bytes memory data
+    ) public virtual {
+        _mint(to, id);
+
+        require(
+            to.code.length == 0 ||
+                ERC721TokenReceiver(to).onERC721Received(msg.sender, address(0), id, data) ==
+                ERC721TokenReceiver.onERC721Received.selector,
+            "UNSAFE_RECIPIENT"
+        );
+    }
+}
 
 contract ERC721Recipient is ERC721TokenReceiver {
     address public operator;
