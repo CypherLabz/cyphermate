@@ -27,12 +27,9 @@ contract Timelock is Ownable {
     // Que a transaction
     function queueTransaction(address target_, uint256 value_, bytes memory data_, uint256 executeTimestamp_) public onlyOwner returns (bytes32) {
 
-        // Get the current block.timestamp
-        uint256 _ts = block.timestamp;
-
         // Make sure the executeTimestamp_ is within bounds
-        require(executeTimestamp_ >= (_ts + MIN_DELAY) &&
-                executeTimestamp_ <= (_ts + MAX_DELAY),
+        require(executeTimestamp_ >= (block.timestamp + MIN_DELAY) &&
+                executeTimestamp_ <= (block.timestamp + MAX_DELAY),
                 "Timelock::queueTransaction: TS_OOB");
 
         // Create the hash of the TX as a record of queued transactions
