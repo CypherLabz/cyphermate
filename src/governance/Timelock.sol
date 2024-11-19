@@ -1,55 +1,39 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-contract TimelockAdmin {
-
-    // Events
-    event AdminSet(address msgSender, address oldAdmin, address newAdmin);
-
-    // Need to set admin
-    address public admin;
-
-    // Constructor
-    constructor(address admin_) {
-        _setAdmin(admin_);
-    }
-
-    // Admin Handler Functions
-    function _setAdmin(address admin_) internal {
-        emit AdminSet(msg.sender, admin, admin_);
-        admin = admin_;
-    }
-    
-    function setAdmin(address admin_) external onlyAdmin {
-        _setAdmin(admin_);
-    }
-
-    // Modifier for admin-only functions
-    modifier onlyAdmin {
-        require(msg.sender == admin, "TimelockAdmin::onlyAdmin: NOT_ADMIN");
-        _;
-    }
-
-}
+import { Ownable } from "../access/Ownable.sol";
 
 // TODO: add timelock features
-contract Timelock is TimelockAdmin {
+contract Timelock is Ownable {
 
     // Events
     event TransactionQueued(address indexed operator, bytes32 indexed txHash, address indexed target, uint256 value, bytes data, uint256 executeTimestamp);
     event TransactionCancelled(address indexed operator, bytes32 indexed txHash);
     event TransactionExecuted(address indexed operator, bytes32 indexed txHash, address indexed target, uint256 value, bytes data, uint256 executeTimestamp, bytes returnData);
 
+    // Delay MIN/MAX Settings
+    uint256 public constant MIN_DELAY = 2 days;
+    uint256 public constant MAX_DELAY = 60 days;
+    uint256 public constant EXECUTION_PERIOD = 14 days;
+
     // Constructor
     constructor(address admin_) 
-        TimelockAdmin(admin_)
+        Ownable(admin_)
     {}
 
     // Mapping stores txHashes to queued state
     mapping(bytes32 => bool) public queuedTxes;
 
     // Que a transaction
-    function queueTransaction(address target_, uint256 value_, bytes memory data_, uint256 executeTimestamp_) public onlyAdmin {
+    function queueTransaction(address target_, uint256 value_, bytes memory data_, uint256 executeTimestamp_) public onlyOwner returns (bytes32) {
+
+        // Get the current block.timestamp
+        uint256 _ts = block.timestamp;
+
+        // Make sure the executeTimestamp_ is within bounds
+        require(executeTimestamp_ >= (_ts + MIN_DELAY) &&
+                executeTimestamp_ <= (_ts + MAX_DELAY),
+                "Timelock::queueTransaction: TS_OOB");
 
         // Create the hash of the TX as a record of queued transactions
         bytes32 _txHash = keccak256(abi.encode(
@@ -68,10 +52,13 @@ contract Timelock is TimelockAdmin {
 
         // Emit a TransactionQueued event
         emit TransactionQueued(msg.sender, _txHash, target_, value_, data_, executeTimestamp_);
+
+        // Return the txHash
+        return _txHash;
     }
 
     // Cancel a transaction
-    function cancelTransaction(bytes32 txHash_) public onlyAdmin {
+    function cancelTransaction(bytes32 txHash_) public onlyOwner {
 
         // Make sure the TX Hash is actually queued
         require(queuedTxes[txHash_] == true, 
@@ -85,7 +72,7 @@ contract Timelock is TimelockAdmin {
     }
 
     // Execute a Transaction
-    function executeTransaction(address target_, uint256 value_, bytes memory data_, uint256 executeTimestamp_) public payable onlyAdmin returns (bytes memory) {
+    function executeTransaction(address target_, uint256 value_, bytes memory data_, uint256 executeTimestamp_) public payable onlyOwner returns (bytes memory) {
 
         // Calculate the txHash
         bytes32 _txHash = keccak256(abi.encode(
@@ -102,6 +89,14 @@ contract Timelock is TimelockAdmin {
         // Make sure that the msg.value exactly matches value_ to send
         require(value_ == msg.value,
             "Timelock::executeTransaction: INCORRECT_VALUE");
+
+        // Make sure that the TX has reached its executeTimestamp
+        require(block.timestamp >= executeTimestamp_, 
+            "Timelock::executeTransaction: TIMELOCK_NOT_REACHED");
+
+        // Then, make sure its within the execution period
+        require((block.timestamp + EXECUTION_PERIOD) <= executeTimestamp_,
+            "Timelock::executeTransaction: TIMELOCK_EXCEEDED_EXECUTION_PERIOD");
 
         // Consume the queued TX
         queuedTxes[_txHash] = false;
