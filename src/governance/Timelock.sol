@@ -3,7 +3,6 @@ pragma solidity ^0.8.28;
 
 import { Ownable } from "../access/Ownable.sol";
 
-// TODO: add timelock features
 contract Timelock is Ownable {
 
     // Events
@@ -13,7 +12,7 @@ contract Timelock is Ownable {
 
     // Delay MIN/MAX Settings
     uint256 public constant MIN_DELAY = 2 days;
-    uint256 public constant MAX_DELAY = 60 days;
+    uint256 public constant MAX_DELAY = 30 days;
     uint256 public constant EXECUTION_PERIOD = 14 days;
 
     // Constructor
@@ -92,7 +91,7 @@ contract Timelock is Ownable {
             "Timelock::executeTransaction: TIMELOCK_NOT_REACHED");
 
         // Then, make sure its within the execution period
-        require((block.timestamp + EXECUTION_PERIOD) <= executeTimestamp_,
+        require(block.timestamp <= (executeTimestamp_ + EXECUTION_PERIOD),
             "Timelock::executeTransaction: TIMELOCK_EXCEEDED_EXECUTION_PERIOD");
 
         // Consume the queued TX
