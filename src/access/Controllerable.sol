@@ -13,6 +13,10 @@ import { Ownable } from "./Ownable.sol";
 
 abstract contract Controllerable is Ownable {
 
+    constructor(address owner_) 
+        Ownable(owner_)
+    {}
+
     event ControllerSet(address indexed owner, address indexed controller, string controllerType, bool status);
     
     mapping(string => mapping(address => bool)) internal __controllers;
