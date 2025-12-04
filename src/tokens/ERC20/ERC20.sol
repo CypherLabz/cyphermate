@@ -1,21 +1,22 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+// Last update: 2024-02-12
+pragma solidity ^0.8.20;
 
-contract ERC20 {
+// EIP-20 Compliant -> https://eips.ethereum.org/EIPS/eip-20
+abstract contract ERC20 {
+
     event Transfer(address indexed from, address indexed to, uint256 amount);
     event Approval(address indexed owner, address indexed spender, uint256 amount);
 
     string public name;
     string public symbol;
 
+    // Override decimals using a function override here
     function decimals() public view virtual returns (uint8) {
-        return 18;
+        return 18; 
     }
 
-    constructor(
-        string memory name_,
-        string memory symbol_
-    ) {
+    constructor(string memory name_, string memory symbol_) {
         name = name_;
         symbol = symbol_;
     }
@@ -26,36 +27,52 @@ contract ERC20 {
     mapping(address => mapping(address => uint256)) public allowance;
 
     function _mint(address to_, uint256 amount_) internal virtual {
-        require(to_ != address(0), "ERC20::_mint TO_ZERO");
+        require(to_ != address(0), "ERC20: _mint to zero");
+
         totalSupply += amount_;
-        unchecked {
-            balanceOf[to_] += amount_;
+        
+        // Cannot overflow because the sum of all user
+        // balances can't exceed the max uint256 value.
+        unchecked { 
+            balanceOf[to_] += amount_; 
         }
+        
         emit Transfer(address(0), to_, amount_);
     }
 
     function _burn(address from_, uint256 amount_) internal virtual {
-        require(from_ != address(0), "ERC20::_burn FROM_ZERO");
+        require(from_ != address(0), "ERC20: _burn from zero");
+
         balanceOf[from_] -= amount_;
+        
+        // Cannot underflow because a user's balance
+        // will never be larger than the total supply.
         unchecked {
             totalSupply -= amount_;
         }
+        
         emit Transfer(from_, address(0), amount_);
     }
 
     function _transfer(address from_, address to_, uint256 amount_) internal virtual {
-        require(from_ != address(0), "ERC20::_transfer FROM_ZERO");
-        require(to_ != address(0), "ERC20::_transfer TO_ZERO");
-        balanceOf[from_] -= amount_;
-        unchecked {
+        require(from_ != address(0), "ERC20: _transfer from_ zero");
+        require(to_ != address(0), "ERC20: _transfer to_ zero");
+
+        balanceOf[from_] -= amount_; // underflow-as-require
+
+        // Cannot overflow because the sum of all user 
+        // balances can't exceed max uint256 value.
+        unchecked { 
             balanceOf[to_] += amount_;
         }
+
         emit Transfer(from_, to_, amount_);
     }
 
-    function _spendAllowance(address from_, address operator_, uint256 amount_) internal virtual {
+    function _spendAllowance(address from_, address operator_, uint256 amount_) 
+    internal virtual {
         if (allowance[from_][operator_] != type(uint256).max) {
-            allowance[from_][operator_] -= amount_;
+            allowance[from_][operator_] -= amount_; // underflow-as-require
         }
     }
 
@@ -63,8 +80,8 @@ contract ERC20 {
         allowance[owner_][spender_] = amount_;
         emit Approval(owner_, spender_, amount_);
     }
-
-    function approve(address spender_, uint256 amount_) public virtual returns (bool) {
+    
+    function approve(address spender_, uint256 amount_) public virtual returns (bool) { 
         _approve(msg.sender, spender_, amount_);
         return true;
     }
@@ -80,5 +97,3 @@ contract ERC20 {
         return true;
     }
 }
-
-
