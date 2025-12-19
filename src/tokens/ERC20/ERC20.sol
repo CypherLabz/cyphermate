@@ -20,25 +20,37 @@ contract ERC20 {
         symbol = symbol_;
     }
 
-    uint256 public totalSupply;
+    uint256 internal _totalSupply;
 
-    mapping(address => uint256) public balanceOf;
-    mapping(address => mapping(address => uint256)) public allowance;
+    mapping(address => uint256) internal _balanceOf;
+    mapping(address => mapping(address => uint256)) internal _allowance;
+
+	function totalSupply() public view virtual returns (uint256) {
+		return _totalSupply;
+	}
+
+	function balanceOf(address wallet_) public view virtual returns (uint256) {
+		return _balanceOf[wallet_];
+	}
+
+	function allowance(address owner_, address spender_) public view virtual returns (uint256) {
+		return _allowance[owner_][spender_];
+	}
 
     function _mint(address to_, uint256 amount_) internal virtual {
         require(to_ != address(0), "ERC20::_mint TO_ZERO");
-        totalSupply += amount_;
+        _totalSupply += amount_;
         unchecked {
-            balanceOf[to_] += amount_;
+            _balanceOf[to_] += amount_;
         }
         emit Transfer(address(0), to_, amount_);
     }
 
     function _burn(address from_, uint256 amount_) internal virtual {
         require(from_ != address(0), "ERC20::_burn FROM_ZERO");
-        balanceOf[from_] -= amount_;
+        _balanceOf[from_] -= amount_;
         unchecked {
-            totalSupply -= amount_;
+            _totalSupply -= amount_;
         }
         emit Transfer(from_, address(0), amount_);
     }
@@ -46,21 +58,21 @@ contract ERC20 {
     function _transfer(address from_, address to_, uint256 amount_) internal virtual {
         require(from_ != address(0), "ERC20::_transfer FROM_ZERO");
         require(to_ != address(0), "ERC20::_transfer TO_ZERO");
-        balanceOf[from_] -= amount_;
+        _balanceOf[from_] -= amount_;
         unchecked {
-            balanceOf[to_] += amount_;
+            _balanceOf[to_] += amount_;
         }
         emit Transfer(from_, to_, amount_);
     }
 
-    function _spendAllowance(address from_, address operator_, uint256 amount_) internal virtual {
-        if (allowance[from_][operator_] != type(uint256).max) {
-            allowance[from_][operator_] -= amount_;
+    function _spendAllowance(address owner_, address spender_, uint256 amount_) internal virtual {
+        if (allowance(owner_, spender_) != type(uint256).max) {
+            _allowance[owner_][spender_] -= amount_;
         }
     }
 
     function _approve(address owner_, address spender_, uint256 amount_) internal virtual {
-        allowance[owner_][spender_] = amount_;
+        _allowance[owner_][spender_] = amount_;
         emit Approval(owner_, spender_, amount_);
     }
 
