@@ -8,6 +8,8 @@ library Uint256Wrapper {
 		return uint256(uint160(a));
 	}
 
-
+	function toAddress(uint256 a) public pure returns (address) {
+		return address(uint160(a));
+	}
 
 }
