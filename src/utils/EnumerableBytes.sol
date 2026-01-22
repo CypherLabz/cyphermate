@@ -13,20 +13,20 @@ pragma solidity ^0.8.26;
 library EnumerableBytes {
 
 	// data structure 
-	struct Set {
+	struct BSet {
 		bytes[] values; // values packed as a big array
 		mapping(bytes => uint256) indexPlusOne; // location of data in values
 	}
 
 	// data manipulations
-	function add(Set storage s, bytes calldata v) internal returns (bool) {
+	function add(BSet storage s, bytes calldata v) internal returns (bool) {
 		if (s.indexPlusOne[v] != 0) return false;
 		s.values.push(v);
 		s.indexPlusOne[v] = s.values.length;
 		return true;
 	}
 
-	function remove(Set storage s, bytes calldata v) internal returns (bool) {
+	function remove(BSet storage s, bytes calldata v) internal returns (bool) {
 		uint256 idxP1 = s.indexPlusOne[v];
 		if (idxP1 == 0) return false;
 
@@ -45,15 +45,15 @@ library EnumerableBytes {
 		return true;
 	}
 
-	function contains(Set storage s, bytes calldata v) internal view returns (bool) {
+	function contains(BSet storage s, bytes calldata v) internal view returns (bool) {
 		return s.indexPlusOne[v] != 0;
 	}
 
-	function length(Set storage s) internal view returns (uint256) {
+	function length(BSet storage s) internal view returns (uint256) {
 		return s.values.length;
 	}
 
-	function at(Set storage s, uint256 idx) internal view returns (bytes memory) {
+	function at(BSet storage s, uint256 idx) internal view returns (bytes memory) {
 		return s.values[idx];
 	}
 }
