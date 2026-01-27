@@ -8,7 +8,7 @@ abstract contract Ownable {
 
     address public owner; 
 
-    modifier onlyOwner() virtual {
+    modifier onlyOwner() {
         require (msg.sender == owner, "Ownable::onlyOwner: NOT_OWNER");
         _;
     }
