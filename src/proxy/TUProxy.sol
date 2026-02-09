@@ -8,7 +8,6 @@ pragma solidity ^0.8.20;
 // in the fallback.
 
 interface ITransparentUpgradeableProxy {
-
     // Events
     event ImplementationSet(address setter, address implementation);
     event AdminSet(address oldAdmin, address newAdmin);
