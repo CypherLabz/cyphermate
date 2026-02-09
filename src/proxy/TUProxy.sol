@@ -33,12 +33,6 @@ contract TransparentUpgradeableProxy is ITransparentUpgradeableProxy {
     bytes32 internal constant ADMIN_SLOT = bytes32(uint256(keccak256("eip1967.proxy.admin")) - 1);
     bytes32 internal constant IMPLEMENTATION_SLOT = bytes32(uint256(keccak256("eip1967.proxy.implementation")) - 1);
 
-    // ===== modifier =====
-    modifier onlyAdmin {
-        require(msg.sender == _admin(), NotAdmin());
-        _;
-    }
-
     // ===== proxy administration is handled in fallback() and forwarded to _adminCall() =====
     function _adminCall() internal {
         // setAdmin
