@@ -16,6 +16,7 @@ interface ITransparentUpgradeableProxy {
     // Errors
     error ImplementationEmpty(); 
     error NotAdmin();
+    error AdminCallFailed();
 }
 
 interface ITransparentUpgradeableProxyAdmin {
@@ -23,6 +24,7 @@ interface ITransparentUpgradeableProxyAdmin {
     function setAdmin(address newAdmin_) external;
     function setImplementation(address newImplementation_) external;
     function upgradeToAndCall(address newImplementation_, bytes memory data_) external;
+    function renounceAdmin() external;
 }
 
 // main contract TUProxy
@@ -49,15 +51,19 @@ contract TransparentUpgradeableProxy is ITransparentUpgradeableProxy {
         }
 
         // setImplementation
-        if (msg.sig == ITransparentUpgradeableProxyAdmin.setImplementation.selector) {
+        else if (msg.sig == ITransparentUpgradeableProxyAdmin.setImplementation.selector) {
             (address implementation_) = abi.decode(msg.data[4:], (address));
             _setImplementation(implementation_);
         }
 
         // upgradeToAndCall
-        if (msg.sig == ITransparentUpgradeableProxyAdmin.upgradeToAndCall.selector) {
+        else if (msg.sig == ITransparentUpgradeableProxyAdmin.upgradeToAndCall.selector) {
             (address newImplementation_, bytes memory data_) = abi.decode(msg.data[4:], (address, bytes));
             _setImplementationAndDelegateCall(newImplementation_, data_);
+        }
+
+        else {
+            revert AdminCallFailed();
         }
     }
 
@@ -129,7 +135,7 @@ contract TransparentUpgradeableProxy is ITransparentUpgradeableProxy {
     }
 
     // ===== delegation entry point handler =====
-    fallback() external {
+    fallback() external payable {
         // by handling admin differently here, we achieve "transparency"
         if (_admin() == msg.sender) {
             _adminCall();

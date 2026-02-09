@@ -15,6 +15,7 @@ interface INonTransparentUpgradeableProxy {
     // Errors
     error ImplementationEmpty(); 
     error NotAdmin();
+    error NewAdminEmpty();
 
     // Proxy administration -- we prefix with NTUP to avoid function selector conflicts 
     function NTUP_setAdmin(address newAdmin_) external;
@@ -45,6 +46,7 @@ contract NonTransparentUpgradeableProxy is INonTransparentUpgradeableProxy {
 
     // ===== proxy administration =====
     function NTUP_setAdmin(address newAdmin_) external onlyAdmin {
+        require(newAdmin_ != address(0), NewAdminEmpty());
         _setAdmin(newAdmin_);
     }
 
@@ -124,7 +126,12 @@ contract NonTransparentUpgradeableProxy is INonTransparentUpgradeableProxy {
     }
 
     // ===== delegation entry point handler =====
-    fallback() external {
+    fallback() external payable {
+        _delegate(_implementation());
+    }
+
+    // we add receive() because linter is screaming at me 
+    receive() external payable {
         _delegate(_implementation());
     }
 }
