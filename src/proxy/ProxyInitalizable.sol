@@ -4,12 +4,15 @@ pragma solidity ^0.8.20;
 // a helper contract that helps with proxy initalization for cleaner code
 abstract contract ProxyInitializable {
 
+    // error for initialized
+    error AlreadyInitialized();
+
     // a flag for contract initialization
     bool internal _initialized;
 
     // a one-use flag modifier for initializer
-    modifier Initializer {
-        require(!_initialized);
+    modifier OneWayInitializer {
+        require(!_initialized, AlreadyInitialized());
         _initialized = true;
         _;
     }
