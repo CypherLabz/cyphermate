@@ -24,7 +24,6 @@ interface ITransparentUpgradeableProxyAdmin {
     function setAdmin(address newAdmin_) external;
     function setImplementation(address newImplementation_) external;
     function upgradeToAndCall(address newImplementation_, bytes memory data_) external;
-    function renounceAdmin() external;
 }
 
 // main contract TUProxy
