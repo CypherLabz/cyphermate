@@ -16,11 +16,10 @@ interface INonTransparentUpgradeableProxy {
     error ImplementationEmpty(); 
     error NotAdmin();
 
-    // Proxy administration
+    // Proxy administration -- we prefix with NTUP to avoid function selector conflicts 
     function NTUP_setAdmin(address newAdmin_) external;
     function NTUP_setImplementation(address newImplementation_) external;
     function NTUP_upgradeToAndCall(address newImplementation_, bytes memory data_) external;
-
 }
 
 // main contract for NTUProxy
