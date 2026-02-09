@@ -16,4 +16,10 @@ abstract contract ProxyInitializable {
         _initialized = true;
         _;
     }
+
+    // to use on implementation constructor to trigger its initialize 
+    // without calling the actual initializer
+    function _oneWayInitialize() internal {
+        _initialized = true;
+    }
 }
