@@ -29,9 +29,8 @@ contract NonTransparentUpgradeableProxy is INonTransparentUpgradeableProxy {
     constructor(address admin_, address implementation_, bytes memory data_) {
         // set the proxy admin
         _setAdmin(admin_);
-        // these two actions chained together are equivalent to `upgradeToAndCall`
-        _setImplementation(implementation_);
-        _delegateCallToImplementation(data_);
+        // set implementation and call
+        _setImplementationAndDelegateCall(implementation_, data_);
     }
  
     // ===== storage layout locations EIP1967 =====

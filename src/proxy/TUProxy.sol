@@ -28,6 +28,13 @@ interface ITransparentUpgradeableProxyAdmin {
 // main contract TUProxy
 contract TransparentUpgradeableProxy is ITransparentUpgradeableProxy {
 
+    // ===== constructor =====
+    constructor(address admin_, address implementation_, bytes memory data_) {
+        // set the proxy admin
+        _setAdmin(admin_);
+        // set implementation and call
+        _setImplementationAndDelegateCall(implementation_, data_);
+    }
 
     // ===== storage layout locations EIP1967 =====
     bytes32 internal constant ADMIN_SLOT = bytes32(uint256(keccak256("eip1967.proxy.admin")) - 1);
